@@ -101,7 +101,7 @@ const Models = {
         this.TriangleSetInfo.push(setData);
         
         // Identify mountains triangle sets by texture name
-        if (inputTriangles[whichSet].material.texture === "mountain_texture.png") {
+        if (inputTriangles[whichSet].material.texture === "mountain.png") {
           this.mountainsSetIndices.push(whichSet);
         }
         
