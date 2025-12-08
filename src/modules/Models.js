@@ -1,7 +1,7 @@
 // Model loading, triangle sets, buffers, and transformations
 
 const Models = {
-  INPUT_TRIANGLES_URL: "https://korupttinker.github.io/battlezone_js/scene.json",
+  INPUT_TRIANGLES_URL: "https://korupttinker.github.io/battlezone_js/mountain.json",
   
   vertexBuffer: null,
   triangleBuffer: null,

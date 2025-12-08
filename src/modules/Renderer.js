@@ -9,13 +9,8 @@ const Renderer = {
     var imageCanvas = document.getElementById("myImageCanvas");
     var cw = imageCanvas.width, ch = imageCanvas.height;
     var imageContext = imageCanvas.getContext("2d");
-    var bkgdImage = new Image();
-    bkgdImage.crossOrigin = "Anonymous";
-    bkgdImage.src = "https://ncsucgclass.github.io/prog4/sky.jpg";
-    bkgdImage.onload = function(){
-      var iw = bkgdImage.width, ih = bkgdImage.height;
-      imageContext.drawImage(bkgdImage, 0, 0, iw, ih, 0, 0, cw, ch);
-    };
+    imageContext.fillStyle = "black";
+    imageContext.fillRect(0, 0, cw, ch);
 
     // Get the canvas and context
     var canvas = document.getElementById("myWebGLCanvas");
@@ -26,7 +21,7 @@ const Renderer = {
         throw "unable to create gl context -- is your browser gl ready?";
       } else {
         this.gl.viewport(0, 0, canvas.width, canvas.height);
-        this.gl.clearColor(0.0, 0.0, 0.0, 0.0);
+        this.gl.clearColor(0.0, 0.0, 0.0, 1.0); // solid black background
         this.gl.clearDepth(1.0);
         this.gl.enable(this.gl.DEPTH_TEST);
         this.gl.enable(this.gl.BLEND);
