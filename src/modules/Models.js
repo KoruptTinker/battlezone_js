@@ -1,7 +1,10 @@
 // Model loading, triangle sets, buffers, and transformations
 
 const Models = {
-  INPUT_TRIANGLES_URL: "https://korupttinker.github.io/battlezone_js/mountain.json",
+  // Remote sources for both the mountain and tank JSON triangle sets
+  INPUT_TRIANGLES_URLS: [
+    "https://korupttinker.github.io/battlezone_js/scene.json"
+  ],
   
   vertexBuffer: null,
   triangleBuffer: null,
@@ -22,8 +25,25 @@ const Models = {
   
   // Load triangles from JSON file
   loadTriangles: function(gl) {
-    var inputTriangles = Utils.getJSONFile(this.INPUT_TRIANGLES_URL, "triangles");
-    if (inputTriangles != String.null) {
+    // Reset any stale buffers/state in case we reload
+    this.indexArray = [];
+    this.textureArray = [];
+    this.modelMat = [];
+    this.TriangleSetInfo = [];
+    this.selectedSet = -1;
+
+    // Support loading multiple JSON triangle sets so we can show mountains + tank together
+    var triangleSources = Array.isArray(this.INPUT_TRIANGLES_URLS) ? this.INPUT_TRIANGLES_URLS : [this.INPUT_TRIANGLES_URLS];
+    var inputTriangles = [];
+    triangleSources.forEach(function(url) {
+      var data = Utils.getJSONFile(url, "triangles");
+      if (data != String.null) {
+        // Each file returns an array of triangle sets; append them
+        inputTriangles = inputTriangles.concat(data);
+      }
+    });
+
+    if (inputTriangles.length > 0) {
       var whichSetVert;
       var whichSetTri; 
       var coordArray = []; 

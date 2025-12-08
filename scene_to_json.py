@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """
-Convert OBJ file to triangles.json format with WebGL coordinate system.
+Convert scene.obj file to triangles.json format with WebGL coordinate system.
 
-Output JSON structure matches `stl_to_json.py`:
+This script is similar to obj_to_json.py but handles object-specific texture assignments:
+- Torus.005 -> mountain_texture.png (or mountain_texture.jpg if specified)
+- Cube -> enemy_tank.png
+- Cube.001 -> texture_test.png
+
+Output JSON structure:
 [
   {
     "material": { ... },
@@ -67,7 +72,7 @@ def parse_mtl_file(mtl_filename):
                     'specular': [0.0, 0.0, 0.0],
                     'n': 1,
                     'alpha': 1.0,
-                    'texture': "enemy_tank.png"
+                    'texture': None
                 }
             
             elif current_material:
@@ -95,16 +100,30 @@ def parse_mtl_file(mtl_filename):
     return materials
 
 
+def get_object_texture(object_name):
+    """
+    Get the texture file for a specific object name.
+    
+    Returns:
+        Texture filename or None
+    """
+    texture_map = {
+        #  mapping from object name to texture file name
+        # 'Cube': 'enemy_tank.png',
+    }
+    return texture_map.get(object_name)
+
+
 def read_obj_file(filename):
     """
-    Read OBJ file and return vertices, normals, UVs, and faces
+    Read OBJ file and return vertices, normals, UVs, and faces with object tracking
     
     Returns:
         Dictionary containing:
         - vertices: list of [x, y, z] positions
         - normals: list of [x, y, z] normals
         - uvs: list of [u, v] texture coordinates
-        - faces: list of face definitions with material info
+        - faces: list of face definitions with material and object info
     """
     vertices = []  # List of vertex positions
     normals = []   # List of vertex normals
@@ -112,6 +131,7 @@ def read_obj_file(filename):
     faces = []     # List of faces
     
     current_material = None
+    current_object = None
     materials = {}
     
     print(f"Reading OBJ file: {filename}")
@@ -129,8 +149,13 @@ def read_obj_file(filename):
             
             command = parts[0]
             
+            # Object name
+            if command == 'o':
+                current_object = parts[1] if len(parts) > 1 else None
+                print(f"Found object: {current_object}")
+            
             # Reference to material library
-            if command == 'mtllib':
+            elif command == 'mtllib':
                 mtl_filename = ' '.join(parts[1:])
                 # Try to find MTL file in same directory as OBJ
                 mtl_path = os.path.join(os.path.dirname(filename), mtl_filename)
@@ -161,7 +186,8 @@ def read_obj_file(filename):
                     'vertices': [],
                     'normals': [],
                     'uvs': [],
-                    'material': current_material
+                    'material': current_material,
+                    'object': current_object
                 }
                 
                 # Parse face vertices (can be v, v/vt, v/vt/vn, or v//vn)
@@ -216,7 +242,8 @@ def triangulate_face(face):
             'vertices': [face['vertices'][0], face['vertices'][i], face['vertices'][i + 1]],
             'normals': [face['normals'][0], face['normals'][i], face['normals'][i + 1]],
             'uvs': [face['uvs'][0], face['uvs'][i], face['uvs'][i + 1]],
-            'material': face['material']
+            'material': face['material'],
+            'object': face['object']
         }
         triangles.append(tri)
     
@@ -245,7 +272,7 @@ def convert_obj_to_json(obj_filename, json_filename, default_material=None):
     Convert OBJ file to triangles.json format with WebGL coordinates.
     
     Output matches the structure produced by `stl_to_json.py` while keeping
-    per-material groupings from the OBJ.
+    per-material groupings from the OBJ, with object-specific texture overrides.
     
     Args:
         obj_filename: Input OBJ file path
@@ -260,7 +287,7 @@ def convert_obj_to_json(obj_filename, json_filename, default_material=None):
             "specular": [0.3, 0.3, 0.3],
             "n": 11,
             "alpha": 1.0,
-            "texture": "cat.png"
+            "texture": None
         }
     
     # Read OBJ file
@@ -281,30 +308,43 @@ def convert_obj_to_json(obj_filename, json_filename, default_material=None):
     scene_normal_sum = [0.0, 0.0, 0.0]
     scene_normal_count = 0
     
-    # Group faces by material
-    faces_by_material = defaultdict(list)
+    # Group faces by material and object (for texture assignment)
+    # Key: (material_name, object_name) to handle object-specific textures
+    faces_by_material_object = defaultdict(list)
     
-    # Triangulate all faces and group by material
+    # Triangulate all faces and group by material and object
     for face in obj_faces:
         triangles = triangulate_face(face)
         material_name = face['material'] or 'default'
-        faces_by_material[material_name].extend(triangles)
+        object_name = face['object'] or 'unknown'
+        key = (material_name, object_name)
+        faces_by_material_object[key].extend(triangles)
     
-    print(f"Found {len(faces_by_material)} material groups")
+    print(f"Found {len(faces_by_material_object)} material/object groups")
     
-    # Build output structure - one object per material
+    # Build output structure - one object per material/object combination
     output = []
     
-    for material_name, faces in faces_by_material.items():
-        print(f"\nProcessing material: {material_name}")
+    for (material_name, object_name), faces in faces_by_material_object.items():
+        print(f"\nProcessing material: {material_name}, object: {object_name}")
         
         # Get material properties
         if material_name in obj_materials:
-            material = obj_materials[material_name]
+            material = obj_materials[material_name].copy()
         else:
             material = default_material.copy()
         
-        # Build unique vertex list for this material
+        # Override texture based on object name
+        object_texture = get_object_texture(object_name)
+        if object_texture:
+            material['texture'] = object_texture
+            print(f"  Assigned texture: {object_texture} (based on object name)")
+        elif material.get('texture'):
+            print(f"  Using material texture: {material.get('texture')}")
+        else:
+            print(f"  No texture assigned")
+        
+        # Build unique vertex list for this material/object
         vertex_map = {}  # Maps (position, normal, uv) tuples to new index
         vertices = []
         normals = []
@@ -481,8 +521,8 @@ if __name__ == "__main__":
     import sys
     
     # Default filenames
-    obj_file = "enemy_tank.obj"
-    json_file = "enemy_tank.json"
+    obj_file = "scene.obj"
+    json_file = "scene.json"
     
     # Parse command line arguments
     if len(sys.argv) > 1:
@@ -500,11 +540,12 @@ if __name__ == "__main__":
         "texture": None
     }
     
-    print("OBJ to JSON Converter with UV Preservation")
-    print("=" * 50)
+    print("Scene OBJ to JSON Converter with Object-Specific Textures")
+    print("=" * 60)
     print(f"Input: {obj_file}")
     print(f"Output: {json_file}")
-    print("=" * 50)
+    print("=" * 60)
     print()
     
     convert_obj_to_json(obj_file, json_file, default_material)
+

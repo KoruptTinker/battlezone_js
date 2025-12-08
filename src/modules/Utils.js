@@ -1,6 +1,7 @@
 // Utility functions for file loading and texture management
 
 const Utils = {
+  // Remote asset base URL (textures are hosted alongside the JSON files)
   INPUT_TEXTURES_URL: "https://korupttinker.github.io/battlezone_js/",
   
   // Get the JSON file from the passed URL
