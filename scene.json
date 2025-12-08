@@ -18,7 +18,7 @@
       ],
       "n": 0.0,
       "alpha": 1.0,
-      "texture": "cat.png"
+      "texture": "texture_test.png"
     },
     "vertices": [
       [
@@ -444,7 +444,7 @@
       ],
       "n": 0.0,
       "alpha": 1.0,
-      "texture": "cat.png"
+      "texture": "texture_test.png"
     },
     "vertices": [
       [
