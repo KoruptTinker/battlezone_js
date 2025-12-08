@@ -81,12 +81,8 @@ def get_object_texture(object_name):
     """
     Get the texture file for a specific object name.
     """
-    texture_map = {
-        'Cube': 'enemy_tank.png',
-        'Torus.005': 'mountain_texture.png',
-        'Cube.001': 'texture_test.png',
-    }
-    return texture_map.get(object_name)
+    model_type = object_name.split('.')[0]
+    return model_type + '.png'
 
 
 def read_obj_file(filename):
