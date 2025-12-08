@@ -1,12 +1,13 @@
 // Camera and viewing system
 
 const Camera = {
-  Eye: vec4.fromValues(0.5, 0.5, -0.5, 1.0),
+  Eye: vec4.fromValues(-0.1899997740983963, 0.14000022411346436, 0.009999780915677547, 1.0),
   ViewUp: vec4.fromValues(0.0, 1.0, 0.0, 1.0),
-  Target: [0.5, 0.5, 0],
+  Target: [-0.19000000000000034, 1.1087153218475436, 0.2581752325680496],
   distanceFromScreen: 0.5,
   yawAngle: 0,
-  pitchAngle: 0,
+  pitchAngle: 1.320000000000001,
+  rollAngle: 0,
   
   // Calculate angles based on Eye and Target positions
   updateAngles: function() {
@@ -15,6 +16,73 @@ const Camera = {
     var dz = this.Target[2] - this.Eye[2];
     this.yawAngle = Math.atan2(dx, dz);
     this.pitchAngle = Math.atan2(dy, Math.sqrt(dx * dx + dz * dz));
+
+    // Derive roll from current ViewUp relative to forward/world up
+    var forward = vec3.fromValues(dx, dy, dz);
+    vec3.normalize(forward, forward);
+
+    var worldUp = vec3.fromValues(0, 1, 0);
+    var right = vec3.create();
+    vec3.cross(right, forward, worldUp);
+
+    // Handle near-singular when looking straight up/down
+    if (vec3.length(right) < 1e-6) {
+      worldUp = vec3.fromValues(1, 0, 0);
+      vec3.cross(right, forward, worldUp);
+    }
+    vec3.normalize(right, right);
+
+    var upRef = vec3.create();
+    vec3.cross(upRef, right, forward);
+    vec3.normalize(upRef, upRef);
+
+    var viewUp = vec3.fromValues(this.ViewUp[0], this.ViewUp[1], this.ViewUp[2]);
+    vec3.normalize(viewUp, viewUp);
+    var dotUp = vec3.dot(viewUp, upRef);
+    var dotRight = vec3.dot(viewUp, right);
+    this.rollAngle = Math.atan2(dotRight, dotUp);
+  },
+
+  // Align ViewUp with current roll, keeping it orthonormal to forward
+  alignViewUpWithRoll: function() {
+    var forward = vec3.fromValues(
+      this.Target[0] - this.Eye[0],
+      this.Target[1] - this.Eye[1],
+      this.Target[2] - this.Eye[2]
+    );
+    vec3.normalize(forward, forward);
+
+    var worldUp = vec3.fromValues(0, 1, 0);
+    var right = vec3.create();
+    vec3.cross(right, forward, worldUp);
+
+    if (vec3.length(right) < 1e-6) {
+      worldUp = vec3.fromValues(1, 0, 0);
+      vec3.cross(right, forward, worldUp);
+    }
+    vec3.normalize(right, right);
+
+    var upRef = vec3.create();
+    vec3.cross(upRef, right, forward);
+    vec3.normalize(upRef, upRef);
+
+    var cosR = Math.cos(this.rollAngle);
+    var sinR = Math.sin(this.rollAngle);
+    var rolledUp = vec3.create();
+    vec3.scale(rolledUp, upRef, cosR);
+    vec3.scaleAndAdd(rolledUp, rolledUp, right, sinR);
+    vec3.normalize(rolledUp, rolledUp);
+
+    this.ViewUp[0] = rolledUp[0];
+    this.ViewUp[1] = rolledUp[1];
+    this.ViewUp[2] = rolledUp[2];
+  },
+
+  // Apply a roll delta (rotation about forward/Z axis)
+  roll: function(delta) {
+    this.rollAngle += delta;
+    this.alignViewUpWithRoll();
+    this.updateViewingCoordinatesDisplay();
   },
   
   // Update viewing coordinates from webpage inputs
@@ -73,19 +141,21 @@ const Camera = {
   
   // Reset viewing coordinates to default values
   resetViewingCoordinates: function() {
-    this.Eye[0] = 0.5;
-    this.Eye[1] = 0.5;
-    this.Eye[2] = -0.5;
+    this.Eye[0] = -0.1899997740983963;
+    this.Eye[1] = 0.14000022411346436;
+    this.Eye[2] = 0.009999780915677547;
     
-    this.Target[0] = 0.5;
-    this.Target[1] = 0.5;
-    this.Target[2] = 0;
+    this.Target[0] = -0.19000000000000034;
+    this.Target[1] = 1.1087153218475436;
+    this.Target[2] = 0.2581752325680496;
     
     this.ViewUp[0] = 0.0;
     this.ViewUp[1] = 1.0;
     this.ViewUp[2] = 0.0;
+    this.rollAngle = 0;
     
     this.updateAngles();
+    this.alignViewUpWithRoll();
     this.updateViewingCoordinatesDisplay();
     
     var eyeX = document.getElementById("eyeX");

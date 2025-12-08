@@ -34,24 +34,34 @@ const Input = {
           Camera.Target[0] = Camera.Eye[0] + Math.sin(Camera.yawAngle) * Math.cos(Camera.pitchAngle);
           Camera.Target[1] = Camera.Eye[1] + Math.sin(Camera.pitchAngle);
           Camera.Target[2] = Camera.Eye[2] + Math.cos(Camera.yawAngle) * Math.cos(Camera.pitchAngle);
+          Camera.alignViewUpWithRoll();
           break;
         case "D":
           Camera.yawAngle -= 0.015;
           Camera.Target[0] = Camera.Eye[0] + Math.sin(Camera.yawAngle) * Math.cos(Camera.pitchAngle);
           Camera.Target[1] = Camera.Eye[1] + Math.sin(Camera.pitchAngle);
           Camera.Target[2] = Camera.Eye[2] + Math.cos(Camera.yawAngle) * Math.cos(Camera.pitchAngle);
+          Camera.alignViewUpWithRoll();
           break;
         case "W":
           Camera.pitchAngle += 0.03;
           Camera.Target[0] = Camera.Eye[0] + Math.sin(Camera.yawAngle) * Math.cos(Camera.pitchAngle);
           Camera.Target[1] = Camera.Eye[1] + Math.sin(Camera.pitchAngle);
           Camera.Target[2] = Camera.Eye[2] + Math.cos(Camera.yawAngle) * Math.cos(Camera.pitchAngle);
+          Camera.alignViewUpWithRoll();
           break;
         case "S":
           Camera.pitchAngle -= 0.03;
           Camera.Target[0] = Camera.Eye[0] + Math.sin(Camera.yawAngle) * Math.cos(Camera.pitchAngle);
           Camera.Target[1] = Camera.Eye[1] + Math.sin(Camera.pitchAngle);
           Camera.Target[2] = Camera.Eye[2] + Math.cos(Camera.yawAngle) * Math.cos(Camera.pitchAngle);
+          Camera.alignViewUpWithRoll();
+          break;
+        case "Q":
+          Camera.roll(0.03);
+          break;
+        case "E":
+          Camera.roll(-0.03);
           break;
         case "ArrowRight":
           if(Models.selectedSet >= 0) {
@@ -138,13 +148,7 @@ const Input = {
           }
           break;
         case "Escape":
-          Camera.Eye[0] = 0.5;
-          Camera.Eye[1] = 0.5;
-          Camera.Eye[2] = -0.5;
-          Camera.Target[0] = 0.5;
-          Camera.Target[1] = 0.5;
-          Camera.Target[2] = 0;
-          Camera.updateAngles();
+          Camera.resetViewingCoordinates();
           Models.resetModels();
           break;
       }

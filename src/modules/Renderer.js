@@ -5,7 +5,7 @@ const Renderer = {
   
   // Set up WebGL environment
   setupWebGL: function() {
-    // Set up background image canvas
+    // Set up solid background canvas (black)
     var imageCanvas = document.getElementById("myImageCanvas");
     var cw = imageCanvas.width, ch = imageCanvas.height;
     var imageContext = imageCanvas.getContext("2d");
@@ -21,7 +21,7 @@ const Renderer = {
         throw "unable to create gl context -- is your browser gl ready?";
       } else {
         this.gl.viewport(0, 0, canvas.width, canvas.height);
-        this.gl.clearColor(0.0, 0.0, 0.0, 1.0); // solid black background
+        this.gl.clearColor(0.0, 0.0, 0.0, 1.0);
         this.gl.clearDepth(1.0);
         this.gl.enable(this.gl.DEPTH_TEST);
         this.gl.enable(this.gl.BLEND);
@@ -35,7 +35,7 @@ const Renderer = {
   // Render the loaded model
   renderTriangles: function() {
     var gl = this.gl;
-    gl.clearColor(0.0, 0.0, 0.0, 0.0);
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     requestAnimationFrame(() => this.renderTriangles());
     
