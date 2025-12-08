@@ -9,7 +9,124 @@ const Camera = {
   pitchAngle: 1.320000000000001,
   rollAngle: 0,
   
-  // Calculate angles based on Eye and Target positions
+  // Helper: Rotate a vector around the world X axis (1,0,0)
+  rotateAroundWorldX: function(vec, angle) {
+    var cos = Math.cos(angle);
+    var sin = Math.sin(angle);
+    return [
+      vec[0],
+      vec[1] * cos - vec[2] * sin,
+      vec[1] * sin + vec[2] * cos
+    ];
+  },
+  
+  // Helper: Rotate a vector around the world Y axis (0,1,0)
+  rotateAroundWorldY: function(vec, angle) {
+    var cos = Math.cos(angle);
+    var sin = Math.sin(angle);
+    return [
+      vec[0] * cos + vec[2] * sin,
+      vec[1],
+      -vec[0] * sin + vec[2] * cos
+    ];
+  },
+  
+  // Helper: Rotate a vector around the world Z axis (0,0,1)
+  rotateAroundWorldZ: function(vec, angle) {
+    var cos = Math.cos(angle);
+    var sin = Math.sin(angle);
+    return [
+      vec[0] * cos - vec[1] * sin,
+      vec[0] * sin + vec[1] * cos,
+      vec[2]
+    ];
+  },
+  
+  // Yaw: Rotation around world Y axis
+  yaw: function(delta) {
+    // Get current direction from Eye to Target
+    var dir = [
+      this.Target[0] - this.Eye[0],
+      this.Target[1] - this.Eye[1],
+      this.Target[2] - this.Eye[2]
+    ];
+    
+    // Rotate direction around world Y
+    var newDir = this.rotateAroundWorldY(dir, delta);
+    
+    // Update target
+    this.Target[0] = this.Eye[0] + newDir[0];
+    this.Target[1] = this.Eye[1] + newDir[1];
+    this.Target[2] = this.Eye[2] + newDir[2];
+    
+    // Rotate up vector around world Y
+    var up = [this.ViewUp[0], this.ViewUp[1], this.ViewUp[2]];
+    var newUp = this.rotateAroundWorldY(up, delta);
+    this.ViewUp[0] = newUp[0];
+    this.ViewUp[1] = newUp[1];
+    this.ViewUp[2] = newUp[2];
+    
+    this.updateAngles();
+    this.updateViewingCoordinatesDisplay();
+  },
+  
+  // Pitch: Rotation around world X axis
+  pitch: function(delta) {
+    // Get current direction from Eye to Target
+    var dir = [
+      this.Target[0] - this.Eye[0],
+      this.Target[1] - this.Eye[1],
+      this.Target[2] - this.Eye[2]
+    ];
+    
+    // Rotate direction around world X
+    var newDir = this.rotateAroundWorldX(dir, delta);
+    
+    // Update target
+    this.Target[0] = this.Eye[0] + newDir[0];
+    this.Target[1] = this.Eye[1] + newDir[1];
+    this.Target[2] = this.Eye[2] + newDir[2];
+    
+    // Rotate up vector around world X
+    var up = [this.ViewUp[0], this.ViewUp[1], this.ViewUp[2]];
+    var newUp = this.rotateAroundWorldX(up, delta);
+    this.ViewUp[0] = newUp[0];
+    this.ViewUp[1] = newUp[1];
+    this.ViewUp[2] = newUp[2];
+    
+    this.updateAngles();
+    this.updateViewingCoordinatesDisplay();
+  },
+  
+  // Roll: Rotation around world Z axis
+  roll: function(delta) {
+    // Get current direction from Eye to Target
+    var dir = [
+      this.Target[0] - this.Eye[0],
+      this.Target[1] - this.Eye[1],
+      this.Target[2] - this.Eye[2]
+    ];
+    
+    // Rotate direction around world Z
+    var newDir = this.rotateAroundWorldZ(dir, delta);
+    
+    // Update target
+    this.Target[0] = this.Eye[0] + newDir[0];
+    this.Target[1] = this.Eye[1] + newDir[1];
+    this.Target[2] = this.Eye[2] + newDir[2];
+    
+    // Rotate up vector around world Z
+    var up = [this.ViewUp[0], this.ViewUp[1], this.ViewUp[2]];
+    var newUp = this.rotateAroundWorldZ(up, delta);
+    this.ViewUp[0] = newUp[0];
+    this.ViewUp[1] = newUp[1];
+    this.ViewUp[2] = newUp[2];
+    
+    this.updateAngles();
+    this.updateViewingCoordinatesDisplay();
+  },
+  
+  // Calculate angles based on Eye and Target positions (for display purposes)
   updateAngles: function() {
     var dx = this.Target[0] - this.Eye[0];
     var dy = this.Target[1] - this.Eye[1];
@@ -41,48 +158,6 @@ const Camera = {
     var dotUp = vec3.dot(viewUp, upRef);
     var dotRight = vec3.dot(viewUp, right);
     this.rollAngle = Math.atan2(dotRight, dotUp);
-  },
-
-  // Align ViewUp with current roll, keeping it orthonormal to forward
-  alignViewUpWithRoll: function() {
-    var forward = vec3.fromValues(
-      this.Target[0] - this.Eye[0],
-      this.Target[1] - this.Eye[1],
-      this.Target[2] - this.Eye[2]
-    );
-    vec3.normalize(forward, forward);
-
-    var worldUp = vec3.fromValues(0, 1, 0);
-    var right = vec3.create();
-    vec3.cross(right, forward, worldUp);
-
-    if (vec3.length(right) < 1e-6) {
-      worldUp = vec3.fromValues(1, 0, 0);
-      vec3.cross(right, forward, worldUp);
-    }
-    vec3.normalize(right, right);
-
-    var upRef = vec3.create();
-    vec3.cross(upRef, right, forward);
-    vec3.normalize(upRef, upRef);
-
-    var cosR = Math.cos(this.rollAngle);
-    var sinR = Math.sin(this.rollAngle);
-    var rolledUp = vec3.create();
-    vec3.scale(rolledUp, upRef, cosR);
-    vec3.scaleAndAdd(rolledUp, rolledUp, right, sinR);
-    vec3.normalize(rolledUp, rolledUp);
-
-    this.ViewUp[0] = rolledUp[0];
-    this.ViewUp[1] = rolledUp[1];
-    this.ViewUp[2] = rolledUp[2];
-  },
-
-  // Apply a roll delta (rotation about forward/Z axis)
-  roll: function(delta) {
-    this.rollAngle += delta;
-    this.alignViewUpWithRoll();
-    this.updateViewingCoordinatesDisplay();
   },
   
   // Update viewing coordinates from webpage inputs
@@ -155,7 +230,6 @@ const Camera = {
     this.rollAngle = 0;
     
     this.updateAngles();
-    this.alignViewUpWithRoll();
     this.updateViewingCoordinatesDisplay();
     
     var eyeX = document.getElementById("eyeX");

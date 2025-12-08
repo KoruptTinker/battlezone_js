@@ -30,37 +30,27 @@ const Input = {
           Camera.Target[1] -= 0.015;
           break;
         case "A":
-          Camera.yawAngle += 0.015;
-          Camera.Target[0] = Camera.Eye[0] + Math.sin(Camera.yawAngle) * Math.cos(Camera.pitchAngle);
-          Camera.Target[1] = Camera.Eye[1] + Math.sin(Camera.pitchAngle);
-          Camera.Target[2] = Camera.Eye[2] + Math.cos(Camera.yawAngle) * Math.cos(Camera.pitchAngle);
-          Camera.alignViewUpWithRoll();
+          // Yaw: Rotate around world Y axis (positive = turn left)
+          Camera.yaw(0.015);
           break;
         case "D":
-          Camera.yawAngle -= 0.015;
-          Camera.Target[0] = Camera.Eye[0] + Math.sin(Camera.yawAngle) * Math.cos(Camera.pitchAngle);
-          Camera.Target[1] = Camera.Eye[1] + Math.sin(Camera.pitchAngle);
-          Camera.Target[2] = Camera.Eye[2] + Math.cos(Camera.yawAngle) * Math.cos(Camera.pitchAngle);
-          Camera.alignViewUpWithRoll();
+          // Yaw: Rotate around world Y axis (negative = turn right)
+          Camera.yaw(-0.015);
           break;
         case "W":
-          Camera.pitchAngle += 0.03;
-          Camera.Target[0] = Camera.Eye[0] + Math.sin(Camera.yawAngle) * Math.cos(Camera.pitchAngle);
-          Camera.Target[1] = Camera.Eye[1] + Math.sin(Camera.pitchAngle);
-          Camera.Target[2] = Camera.Eye[2] + Math.cos(Camera.yawAngle) * Math.cos(Camera.pitchAngle);
-          Camera.alignViewUpWithRoll();
+          // Pitch: Rotate around world X axis (positive = look up)
+          Camera.pitch(0.03);
           break;
         case "S":
-          Camera.pitchAngle -= 0.03;
-          Camera.Target[0] = Camera.Eye[0] + Math.sin(Camera.yawAngle) * Math.cos(Camera.pitchAngle);
-          Camera.Target[1] = Camera.Eye[1] + Math.sin(Camera.pitchAngle);
-          Camera.Target[2] = Camera.Eye[2] + Math.cos(Camera.yawAngle) * Math.cos(Camera.pitchAngle);
-          Camera.alignViewUpWithRoll();
+          // Pitch: Rotate around world X axis (negative = look down)
+          Camera.pitch(-0.03);
           break;
         case "Q":
+          // Roll: Rotate around world Z axis
           Camera.roll(0.03);
           break;
         case "E":
+          // Roll: Rotate around world Z axis
           Camera.roll(-0.03);
           break;
         case "ArrowRight":
