@@ -23,7 +23,9 @@ const Models = {
   TriangleSetInfo: [],
   selectedSet: -1,
   mountainsSetIndices: [],
+  tanksSetIndices: [],
   initialCameraEye: null,
+  initialCameraTarget: null,
   
   // Load triangles from JSON file
   loadTriangles: function(gl) {
@@ -34,6 +36,7 @@ const Models = {
     this.TriangleSetInfo = [];
     this.selectedSet = -1;
     this.mountainsSetIndices = [];
+    this.tanksSetIndices = [];
 
     // Support loading multiple JSON triangle sets so we can show mountains + tank together
     var triangleSources = Array.isArray(this.INPUT_TRIANGLES_URLS) ? this.INPUT_TRIANGLES_URLS : [this.INPUT_TRIANGLES_URLS];
@@ -101,6 +104,11 @@ const Models = {
         if (inputTriangles[whichSet].material.texture === "mountain_texture.png") {
           this.mountainsSetIndices.push(whichSet);
         }
+        
+        // Identify tank triangle sets by texture name
+        if (inputTriangles[whichSet].material.texture === "enemy_tank.png") {
+          this.tanksSetIndices.push(whichSet);
+        }
       } 
       
       this.vertexBuffer = gl.createBuffer(); 
@@ -143,6 +151,8 @@ const Models = {
       }).catch(function(error) {
         console.error("Error loading textures:", error);
       });
+      
+      // Position tanks will be done after initialCameraEye is set in main()
     } 
   },
   
@@ -187,6 +197,125 @@ const Models = {
         this.translate(deltaX, deltaY, deltaZ, setIdx);
       }
     }
+  },
+  
+  // Position tanks horizontally in front of the camera
+  positionTanksInFrontOfCamera: function() {
+    if (this.tanksSetIndices.length < 2) {
+      console.warn("Need at least 2 tank sets to position them horizontally");
+      return;
+    }
+    
+    // Use initial camera position and target for fixed world positioning
+    var eyePos = this.initialCameraEye ? [this.initialCameraEye[0], this.initialCameraEye[1], this.initialCameraEye[2]] : [Camera.Eye[0], Camera.Eye[1], Camera.Eye[2]];
+    var targetPos = this.initialCameraTarget ? this.initialCameraTarget : Camera.Target;
+    
+    // Calculate forward direction vector (from Eye to Target)
+    var forward = [
+      targetPos[0] - eyePos[0],
+      targetPos[1] - eyePos[1],
+      targetPos[2] - eyePos[2]
+    ];
+    
+    // Normalize forward vector
+    var forwardLen = Math.sqrt(forward[0] * forward[0] + forward[1] * forward[1] + forward[2] * forward[2]);
+    if (forwardLen > 0) {
+      forward[0] /= forwardLen;
+      forward[1] /= forwardLen;
+      forward[2] /= forwardLen;
+    }
+    
+    // Calculate right vector using ViewUp and forward
+    // Right = forward × ViewUp (normalized)
+    var viewUp = [Camera.ViewUp[0], Camera.ViewUp[1], Camera.ViewUp[2]];
+    var right = [
+      forward[1] * viewUp[2] - forward[2] * viewUp[1],
+      forward[2] * viewUp[0] - forward[0] * viewUp[2],
+      forward[0] * viewUp[1] - forward[1] * viewUp[0]
+    ];
+    
+    // Normalize right vector
+    var rightLen = Math.sqrt(right[0] * right[0] + right[1] * right[1] + right[2] * right[2]);
+    if (rightLen > 0) {
+      right[0] /= rightLen;
+      right[1] /= rightLen;
+      right[2] /= rightLen;
+    } else {
+      // Fallback: use world right if cross product is zero
+      right = [1, 0, 0];
+    }
+    
+    // Distance in front of camera along forward direction
+    var distanceInFront = 1.5;
+    
+    // Horizontal offset (spacing between tanks, perpendicular to forward)
+    var horizontalOffset = 0.8;
+    
+    // Calculate position along forward direction (somewhere between eye and target)
+    var basePos = [
+      eyePos[0] + forward[0] * distanceInFront,
+      eyePos[1] + forward[1] * distanceInFront,
+      eyePos[2] + forward[2] * distanceInFront
+    ];
+    
+    // Position first tank to the left (negative right direction)
+    var tank1SetIdx = this.tanksSetIndices[0];
+    var tank1Pos = [
+      basePos[0] - right[0] * horizontalOffset,
+      basePos[1] - right[1] * horizontalOffset,
+      basePos[2] - right[2] * horizontalOffset
+    ];
+    
+    // Position second tank to the right (positive right direction)
+    var tank2SetIdx = this.tanksSetIndices[1];
+    var tank2Pos = [
+      basePos[0] + right[0] * horizontalOffset,
+      basePos[1] + right[1] * horizontalOffset,
+      basePos[2] + right[2] * horizontalOffset
+    ];
+    
+    // Reset model matrices and apply translations
+    // Translate from the tank's center (avgPos) to the desired world position
+    // First translate to origin, then to desired position
+    this.modelMat[tank1SetIdx] = mat4.create();
+    // Translate to move avgPos to origin
+    this.translate(
+      -this.TriangleSetInfo[tank1SetIdx].avgPos[0],
+      -this.TriangleSetInfo[tank1SetIdx].avgPos[1],
+      -this.TriangleSetInfo[tank1SetIdx].avgPos[2],
+      tank1SetIdx
+    );
+    // Then translate to desired world position
+    this.translate(
+      tank1Pos[0],
+      tank1Pos[1],
+      tank1Pos[2],
+      tank1SetIdx
+    );
+    
+    this.modelMat[tank2SetIdx] = mat4.create();
+    // Translate to move avgPos to origin
+    this.translate(
+      -this.TriangleSetInfo[tank2SetIdx].avgPos[0],
+      -this.TriangleSetInfo[tank2SetIdx].avgPos[1],
+      -this.TriangleSetInfo[tank2SetIdx].avgPos[2],
+      tank2SetIdx
+    );
+    // Then translate to desired world position
+    this.translate(
+      tank2Pos[0],
+      tank2Pos[1],
+      tank2Pos[2],
+      tank2SetIdx
+    );
+    
+    console.log("Positioned 2 tanks horizontally in front of camera");
+    console.log("Initial Camera Eye:", eyePos);
+    console.log("Initial Camera Target:", targetPos);
+    console.log("Forward direction:", forward);
+    console.log("Base position:", basePos);
+    console.log("Tank 1 position:", tank1Pos);
+    console.log("Tank 2 position:", tank2Pos);
   }
 };
 

@@ -1,13 +1,19 @@
 // Camera and viewing system
 
 const Camera = {
-  Eye: vec4.fromValues(-0.1899997740983963, 0.14000022411346436, 0.009999780915677547, 1.0),
+  Eye: vec4.fromValues(0.5, 0, 0.2, 1.0),
   ViewUp: vec4.fromValues(0.0, 1.0, 0.0, 1.0),
-  Target: [-0.19000000000000034, 1.1087153218475436, 0.2581752325680496],
+  Target: [0.5, 0, 0.5],
   distanceFromScreen: 0.5,
   yawAngle: 0,
-  pitchAngle: 1.320000000000001,
+  pitchAngle: 0,
   rollAngle: 0,
+  
+  // Store initial values for reset
+  initialEye: vec4.fromValues(0.5, 0, 0.2, 1.0),
+  initialViewUp: vec4.fromValues(0.0, 1.0, 0.0, 1.0),
+  initialTarget: [0.5, 0, 0.5],
+  initialDistanceFromScreen: 0.5,
   
   // Helper: Rotate a vector around the world X axis (1,0,0)
   rotateAroundWorldX: function(vec, angle) {
@@ -68,6 +74,7 @@ const Camera = {
     
     this.updateAngles();
     this.updateViewingCoordinatesDisplay();
+    console.log("Eye coords:", `[${this.Eye[0].toFixed(6)}, ${this.Eye[1].toFixed(6)}, ${this.Eye[2].toFixed(6)}]`);
   },
   
   // Pitch: Rotation around world X axis
@@ -96,6 +103,7 @@ const Camera = {
     
     this.updateAngles();
     this.updateViewingCoordinatesDisplay();
+    console.log("Eye coords:", `[${this.Eye[0].toFixed(6)}, ${this.Eye[1].toFixed(6)}, ${this.Eye[2].toFixed(6)}]`);
   },
   
   // Roll: Rotation around world Z axis
@@ -124,6 +132,7 @@ const Camera = {
     
     this.updateAngles();
     this.updateViewingCoordinatesDisplay();
+    console.log("Eye coords:", `[${this.Eye[0].toFixed(6)}, ${this.Eye[1].toFixed(6)}, ${this.Eye[2].toFixed(6)}]`);
   },
   
   // Move forward/backward along the camera's forward direction
@@ -156,6 +165,18 @@ const Camera = {
     
     this.updateAngles();
     this.updateViewingCoordinatesDisplay();
+    console.log("Eye coords:", `[${this.Eye[0].toFixed(6)}, ${this.Eye[1].toFixed(6)}, ${this.Eye[2].toFixed(6)}]`);
+  },
+  
+  // Move up/down along the world Y axis
+  moveUp: function(distance) {
+    // Move both Eye and Target along the world Y axis
+    this.Eye[1] += distance;
+    this.Target[1] += distance;
+    
+    this.updateAngles();
+    this.updateViewingCoordinatesDisplay();
+    console.log("Eye coords:", `[${this.Eye[0].toFixed(6)}, ${this.Eye[1].toFixed(6)}, ${this.Eye[2].toFixed(6)}]`);
   },
   
   // Calculate angles based on Eye and Target positions (for display purposes)
@@ -221,6 +242,7 @@ const Camera = {
     this.updateAngles();
     this.updateViewingCoordinatesDisplay();
     
+    console.log("Eye coords:", `[${this.Eye[0].toFixed(6)}, ${this.Eye[1].toFixed(6)}, ${this.Eye[2].toFixed(6)}]`);
     console.log("View updated - Eye:", this.Eye, "Target:", this.Target, "ViewUp:", this.ViewUp);
   },
   
@@ -246,24 +268,33 @@ const Camera = {
     }
   },
   
-  // Reset viewing coordinates to default values
+  // Reset viewing coordinates to initial values
   resetViewingCoordinates: function() {
-    this.Eye[0] = -0.1899997740983963;
-    this.Eye[1] = 0.14000022411346436;
-    this.Eye[2] = 0.009999780915677547;
+    // Reset Eye
+    this.Eye[0] = this.initialEye[0];
+    this.Eye[1] = this.initialEye[1];
+    this.Eye[2] = this.initialEye[2];
+    this.Eye[3] = this.initialEye[3];
     
-    this.Target[0] = -0.19000000000000034;
-    this.Target[1] = 1.1087153218475436;
-    this.Target[2] = 0.2581752325680496;
+    // Reset Target
+    this.Target[0] = this.initialTarget[0];
+    this.Target[1] = this.initialTarget[1];
+    this.Target[2] = this.initialTarget[2];
     
-    this.ViewUp[0] = 0.0;
-    this.ViewUp[1] = 1.0;
-    this.ViewUp[2] = 0.0;
+    // Reset ViewUp
+    this.ViewUp[0] = this.initialViewUp[0];
+    this.ViewUp[1] = this.initialViewUp[1];
+    this.ViewUp[2] = this.initialViewUp[2];
+    this.ViewUp[3] = this.initialViewUp[3];
+    
+    // Reset distance and angles
+    this.distanceFromScreen = this.initialDistanceFromScreen;
     this.rollAngle = 0;
     
     this.updateAngles();
     this.updateViewingCoordinatesDisplay();
     
+    // Update HTML input fields
     var eyeX = document.getElementById("eyeX");
     var eyeY = document.getElementById("eyeY");
     var eyeZ = document.getElementById("eyeZ");
@@ -284,7 +315,8 @@ const Camera = {
     if (viewUpY) viewUpY.value = this.ViewUp[1];
     if (viewUpZ) viewUpZ.value = this.ViewUp[2];
     
-    console.log("View reset to default values");
+    console.log("Eye coords:", `[${this.Eye[0].toFixed(6)}, ${this.Eye[1].toFixed(6)}, ${this.Eye[2].toFixed(6)}]`);
+    console.log("View reset to initial values");
   }
 };
 
