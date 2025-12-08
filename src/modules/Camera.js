@@ -126,6 +126,38 @@ const Camera = {
     this.updateViewingCoordinatesDisplay();
   },
   
+  // Move forward/backward along the camera's forward direction
+  moveForward: function(distance) {
+    // Get current direction from Eye to Target
+    var dir = [
+      this.Target[0] - this.Eye[0],
+      this.Target[1] - this.Eye[1],
+      this.Target[2] - this.Eye[2]
+    ];
+    
+    // Calculate length of direction vector
+    var len = Math.sqrt(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]);
+    
+    // Normalize direction vector
+    if (len > 0) {
+      dir[0] /= len;
+      dir[1] /= len;
+      dir[2] /= len;
+    }
+    
+    // Move both Eye and Target along the forward direction
+    this.Eye[0] += dir[0] * distance;
+    this.Eye[1] += dir[1] * distance;
+    this.Eye[2] += dir[2] * distance;
+    
+    this.Target[0] += dir[0] * distance;
+    this.Target[1] += dir[1] * distance;
+    this.Target[2] += dir[2] * distance;
+    
+    this.updateAngles();
+    this.updateViewingCoordinatesDisplay();
+  },
+  
   // Calculate angles based on Eye and Target positions (for display purposes)
   updateAngles: function() {
     var dx = this.Target[0] - this.Eye[0];

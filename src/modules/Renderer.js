@@ -39,6 +39,9 @@ const Renderer = {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     requestAnimationFrame(() => this.renderTriangles());
     
+    // Update mountains translation to follow camera
+    Models.updateMountainsTranslation();
+    
     // vertex buffer: activate and feed into vertex shader
     gl.bindBuffer(gl.ARRAY_BUFFER, Models.vertexBuffer);
     gl.vertexAttribPointer(Shaders.vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0);

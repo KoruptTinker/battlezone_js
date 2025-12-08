@@ -22,6 +22,8 @@ const Models = {
   modelMat: [],
   TriangleSetInfo: [],
   selectedSet: -1,
+  mountainsSetIndices: [],
+  initialCameraEye: null,
   
   // Load triangles from JSON file
   loadTriangles: function(gl) {
@@ -31,6 +33,7 @@ const Models = {
     this.modelMat = [];
     this.TriangleSetInfo = [];
     this.selectedSet = -1;
+    this.mountainsSetIndices = [];
 
     // Support loading multiple JSON triangle sets so we can show mountains + tank together
     var triangleSources = Array.isArray(this.INPUT_TRIANGLES_URLS) ? this.INPUT_TRIANGLES_URLS : [this.INPUT_TRIANGLES_URLS];
@@ -61,6 +64,7 @@ const Models = {
       for (var whichSet = 0; whichSet < inputTriangles.length; whichSet++) {
         var setData = {
           startIdx: totalTriangles * 3,
+          textureName: inputTriangles[whichSet].material.texture
         };
         var avgPos = [0, 0, 0];
         textureNameArray.push(inputTriangles[whichSet].material.texture);
@@ -92,6 +96,11 @@ const Models = {
         setData.avgPos = avgPos;
         this.modelMat.push(mat4.create());
         this.TriangleSetInfo.push(setData);
+        
+        // Identify mountains triangle sets by texture name
+        if (inputTriangles[whichSet].material.texture === "mountain_texture.png") {
+          this.mountainsSetIndices.push(whichSet);
+        }
       } 
       
       this.vertexBuffer = gl.createBuffer(); 
@@ -160,6 +169,24 @@ const Models = {
       this.modelMat[i] = mat4.create();
     }
     this.selectedSet = -1;
+  },
+  
+  // Update mountains translation to follow camera
+  updateMountainsTranslation: function() {
+    if (this.mountainsSetIndices.length > 0 && this.initialCameraEye !== null) {
+      // Calculate translation delta from initial camera position
+      var deltaX = Camera.Eye[0] - this.initialCameraEye[0];
+      var deltaY = Camera.Eye[1] - this.initialCameraEye[1];
+      var deltaZ = Camera.Eye[2] - this.initialCameraEye[2];
+      
+      // Update all mountains triangle sets
+      for (var i = 0; i < this.mountainsSetIndices.length; i++) {
+        var setIdx = this.mountainsSetIndices[i];
+        // Reset mountains model matrix and apply translation
+        this.modelMat[setIdx] = mat4.create();
+        this.translate(deltaX, deltaY, deltaZ, setIdx);
+      }
+    }
   }
 };
 
