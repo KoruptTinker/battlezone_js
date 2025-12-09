@@ -38,6 +38,8 @@ const Input = {
         self.keys.moveDown = true;
       } else if (keyLower === "e") {
         self.keys.moveUp = true;
+      } else if (key === " ") {
+        self.keys.fire = true;
       } else if (key === "Escape") {
         // ESC key still handled immediately for reset
         Camera.resetViewingCoordinates();
@@ -62,6 +64,8 @@ const Input = {
         self.keys.moveDown = false;
       } else if (keyLower === "e") {
         self.keys.moveUp = false;
+      } else if (key === " ") {
+        self.keys.fire = false;
       }
     });
     
