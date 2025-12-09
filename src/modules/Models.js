@@ -29,6 +29,13 @@ const Models = {
   initialCameraEye: null,
   initialCameraTarget: null,
   
+  // Game objects collection (new object-oriented approach)
+  gameObjects: [],
+  tanks: [],
+  mountains: [],
+  houses: [],
+  player: null,
+  
   // Load triangles from JSON file
   loadTriangles: function(gl) {
     // Reset any stale buffers/state in case we reload
@@ -41,6 +48,22 @@ const Models = {
     this.tanksSetIndices = [];
     this.tankForwardDirections = [];
     this.tankPositions = [];
+    
+    // Reset game objects
+    this.gameObjects = [];
+    this.tanks = [];
+    this.mountains = [];
+    this.houses = [];
+    
+    // Initialize collision system
+    Collision.init();
+    
+    // Create player object
+    this.player = new Player({
+      id: 'player',
+      position: [Camera.Eye[0], Camera.Eye[1], Camera.Eye[2]]
+    });
+    Collision.register(this.player);
 
     // Support loading multiple JSON triangle sets so we can show mountains + tank together
     var triangleSources = Array.isArray(this.INPUT_TRIANGLES_URLS) ? this.INPUT_TRIANGLES_URLS : [this.INPUT_TRIANGLES_URLS];
@@ -76,6 +99,9 @@ const Models = {
         var avgPos = [0, 0, 0];
         textureNameArray.push(inputTriangles[whichSet].material.texture);
         
+        // Collect vertices for this set
+        var setVertices = [];
+        
         for (whichSetVert = 0; whichSetVert < inputTriangles[whichSet].vertices.length; whichSetVert++) {
           coordArray = coordArray.concat(inputTriangles[whichSet].vertices[whichSetVert]);
           colorDiffuseArray.push(inputTriangles[whichSet].material.diffuse[0], inputTriangles[whichSet].material.diffuse[1], inputTriangles[whichSet].material.diffuse[2]);
@@ -88,6 +114,13 @@ const Models = {
           avgPos[1] += inputTriangles[whichSet].vertices[whichSetVert][1];
           avgPos[2] += inputTriangles[whichSet].vertices[whichSetVert][2];
           uvArray = uvArray.concat(inputTriangles[whichSet].uvs[whichSetVert]);
+          
+          // Store vertex for game object
+          setVertices.push([
+            inputTriangles[whichSet].vertices[whichSetVert][0],
+            inputTriangles[whichSet].vertices[whichSetVert][1],
+            inputTriangles[whichSet].vertices[whichSetVert][2]
+          ]);
         }
         
         avgPos[0] /= inputTriangles[whichSet].vertices.length;
@@ -104,12 +137,28 @@ const Models = {
         this.modelMat.push(mat4.create());
         this.TriangleSetInfo.push(setData);
         
-        // Identify mountains triangle sets by texture name
+        // Determine object type and create appropriate game object
+        var objectType = inputTriangles[whichSet].type || this.determineTypeFromTexture(inputTriangles[whichSet].material.texture);
+        var gameObject = this.createGameObject(objectType, {
+          id: 'obj_' + whichSet,
+          setIndex: whichSet,
+          textureName: inputTriangles[whichSet].material.texture,
+          vertices: setVertices,
+          avgPos: avgPos,
+          position: [avgPos[0], avgPos[1], avgPos[2]]
+        });
+        
+        if (gameObject) {
+          this.gameObjects.push(gameObject);
+          Collision.register(gameObject);
+        }
+        
+        // Legacy support: identify mountains triangle sets by texture name
         if (inputTriangles[whichSet].material.texture === "mountain.png" || inputTriangles[whichSet].material.texture === "mountain_texture.png") {
           this.mountainsSetIndices.push(whichSet);
         }
         
-        // Identify tank triangle sets by texture name
+        // Legacy support: identify tank triangle sets by texture name
         if (inputTriangles[whichSet].material.texture === "enemy_tank.png") {
           this.tanksSetIndices.push(whichSet);
           // Calculate forward direction from tank vertices
@@ -173,7 +222,109 @@ const Models = {
       
       // Initialize tank positions from scene (extract from model matrices)
       this.initializeTankPositionsFromScene();
+      
+      // Initialize mountain camera offsets
+      this.initializeMountainCameraOffsets();
+      
+      console.log("Created " + this.gameObjects.length + " game objects");
+      console.log("Tanks: " + this.tanks.length);
+      console.log("Mountains: " + this.mountains.length);
+      console.log("Houses: " + this.houses.length);
     } 
+  },
+  
+  // Determine object type from texture name
+  determineTypeFromTexture: function(textureName) {
+    if (!textureName) return 'generic';
+    
+    var lowerTexture = textureName.toLowerCase();
+    
+    if (lowerTexture.includes('tank')) {
+      return 'tank';
+    } else if (lowerTexture.includes('mountain')) {
+      return 'mountain';
+    } else if (lowerTexture.includes('house')) {
+      return 'house';
+    }
+    
+    return 'generic';
+  },
+  
+  // Create appropriate game object based on type
+  createGameObject: function(type, options) {
+    var gameObject;
+    var normalizedType = type ? type.toLowerCase() : '';
+    
+    // Check for tank types (handles 'tank', 'enemy_tank', etc.)
+    if (normalizedType === 'tank' || normalizedType.includes('tank')) {
+      gameObject = new Tank(options);
+      this.tanks.push(gameObject);
+    }
+    // Check for mountain types
+    else if (normalizedType === 'mountain' || normalizedType.includes('mountain')) {
+      gameObject = new Mountain(options);
+      this.mountains.push(gameObject);
+    }
+    // Check for house types
+    else if (normalizedType === 'house' || normalizedType.includes('house')) {
+      gameObject = new House(options);
+      this.houses.push(gameObject);
+    }
+    // Default: create generic game object
+    else {
+      gameObject = new GameObject(options);
+      gameObject.type = type || 'generic';
+    }
+    
+    return gameObject;
+  },
+  
+  // Initialize mountain camera offsets for following behavior
+  initializeMountainCameraOffsets: function() {
+    if (this.initialCameraEye) {
+      var cameraPos = [this.initialCameraEye[0], this.initialCameraEye[1], this.initialCameraEye[2]];
+      for (var i = 0; i < this.mountains.length; i++) {
+        this.mountains[i].setInitialCameraPosition(cameraPos);
+      }
+    }
+  },
+  
+  // Get game object by set index
+  getGameObjectBySetIndex: function(setIndex) {
+    for (var i = 0; i < this.gameObjects.length; i++) {
+      if (this.gameObjects[i].setIndex === setIndex) {
+        return this.gameObjects[i];
+      }
+    }
+    return null;
+  },
+  
+  // Get game objects by type
+  getGameObjectsByType: function(type) {
+    return this.gameObjects.filter(function(obj) {
+      return obj.type === type;
+    });
+  },
+  
+  // Update all game objects
+  updateGameObjects: function(deltaTime) {
+    // Update player first
+    if (this.player) {
+      this.player.update(deltaTime);
+    }
+    
+    // Update all game objects
+    for (var i = 0; i < this.gameObjects.length; i++) {
+      var obj = this.gameObjects[i];
+      if (obj.active) {
+        obj.update(deltaTime);
+        
+        // Sync model matrix to Models array
+        if (obj.setIndex >= 0) {
+          this.modelMat[obj.setIndex] = obj.modelMatrix;
+        }
+      }
+    }
   },
   
   // Calculate the forward direction of a tank from its vertex set
@@ -366,42 +517,10 @@ const Models = {
     }
   },
   
-  // Update tank positions to move forward
-  updateTankMovement: function() {
-    // Check if tanks are loaded
-    if (this.tanksSetIndices.length === 0 || this.tankPositions.length === 0) {
-      return;
-    }
-    
-    // Movement speed (adjusted for small scale)
-    var moveSpeed = 0.0001; // Small movement per frame
-    
-    for (var i = 0; i < this.tanksSetIndices.length; i++) {
-      var setIdx = this.tanksSetIndices[i];
-      var forwardDir = this.tankForwardDirections[i];
-      
-      // Update position (only in XZ plane, keep Y constant)
-      this.tankPositions[i][0] += forwardDir[0] * moveSpeed;
-      // Y remains constant (don't update this.tankPositions[i][1])
-      this.tankPositions[i][2] += forwardDir[2] * moveSpeed;
-      
-      // Update model matrix
-      this.modelMat[setIdx] = mat4.create();
-      // Translate to move avgPos to origin
-      this.translate(
-        -this.TriangleSetInfo[setIdx].avgPos[0],
-        -this.TriangleSetInfo[setIdx].avgPos[1],
-        -this.TriangleSetInfo[setIdx].avgPos[2],
-        setIdx
-      );
-      // Then translate to current position
-      this.translate(
-        this.tankPositions[i][0],
-        this.tankPositions[i][1],
-        this.tankPositions[i][2],
-        setIdx
-      );
-    }
+  // Update tank positions to move forward (legacy - now handled by Tank class)
+  updateTankMovement: function(deltaTime) {
+    // Now handled by Tank.update() through updateGameObjects()
+    // This function is kept for backward compatibility but delegates to game objects
   },
   
   // Transformation functions
@@ -427,6 +546,14 @@ const Models = {
       this.modelMat[i] = mat4.create();
     }
     this.selectedSet = -1;
+    
+    // Reset game objects
+    for (var i = 0; i < this.gameObjects.length; i++) {
+      var obj = this.gameObjects[i];
+      obj.position = [obj.avgPos[0], obj.avgPos[1], obj.avgPos[2]];
+      obj.rotation = [0, 0, 0];
+      obj.updateModelMatrix();
+    }
   },
   
   // Update mountains translation to follow camera
@@ -557,6 +684,12 @@ const Models = {
       tank2SetIdx
     );
     
+    // Update game object positions as well
+    if (this.tanks.length >= 2) {
+      this.tanks[0].setPosition(tank1Pos[0], tank1Pos[1], tank1Pos[2]);
+      this.tanks[1].setPosition(tank2Pos[0], tank2Pos[1], tank2Pos[2]);
+    }
+    
     console.log("Positioned 2 tanks horizontally in front of camera");
     console.log("Initial Camera Eye:", eyePos);
     console.log("Initial Camera Target:", targetPos);
@@ -566,4 +699,3 @@ const Models = {
     console.log("Tank 2 position:", tank2Pos);
   }
 };
-

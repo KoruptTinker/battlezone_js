@@ -4,6 +4,9 @@ const Renderer = {
   gl: null,
   lastFrameTime: null,
   
+  // Collision debug mode
+  debugCollisions: false,
+  
   // Set up WebGL environment
   setupWebGL: function() {
     // Set up solid background canvas (black)
@@ -62,8 +65,23 @@ const Renderer = {
     // Update mountains translation to follow camera
     Models.updateMountainsTranslation();
     
-    // Update tank movement
-    Models.updateTankMovement();
+    // Update all game objects (new object-oriented approach)
+    if (deltaTime > 0) {
+      Models.updateGameObjects(deltaTime);
+    }
+    
+    // Check collisions between all game objects
+    var collisions = Collision.update();
+    
+    // Optionally resolve collisions (push objects apart)
+    for (var i = 0; i < collisions.length; i++) {
+      Collision.resolveCollision(collisions[i]);
+    }
+    
+    // Debug: log collisions
+    if (this.debugCollisions && collisions.length > 0) {
+      console.log("Frame collisions:", collisions.length);
+    }
     
     // vertex buffer: activate and feed into vertex shader
     gl.bindBuffer(gl.ARRAY_BUFFER, Models.vertexBuffer);
@@ -102,13 +120,26 @@ const Renderer = {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, Models.indexBuffer);
     gl.uniform1i(Shaders.textureUniform, 0);
     
+    // Render all triangle sets (only active game objects)
     for (var itr = 0; itr < Models.TriangleSetInfo.length; itr++) {
+      // Check if corresponding game object is active
+      var gameObject = Models.getGameObjectBySetIndex(itr);
+      if (gameObject && !gameObject.active) {
+        continue; // Skip inactive objects
+      }
+      
       gl.uniformMatrix4fv(Shaders.modelMatUniform, false, Models.modelMat[itr]);
       if (Models.textureArray[itr]) {
         gl.bindTexture(gl.TEXTURE_2D, Models.textureArray[itr]);
       }
       gl.drawElements(gl.TRIANGLES, Models.TriangleSetInfo[itr].endIdx - Models.TriangleSetInfo[itr].startIdx, gl.UNSIGNED_SHORT, Models.TriangleSetInfo[itr].startIdx * 2);
     }
+  },
+  
+  // Toggle collision debug mode
+  toggleCollisionDebug: function() {
+    this.debugCollisions = !this.debugCollisions;
+    Collision.debug = this.debugCollisions;
+    console.log("Collision debug:", this.debugCollisions ? "ON" : "OFF");
   }
 };
-
