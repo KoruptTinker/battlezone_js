@@ -153,6 +153,11 @@ const Renderer = {
       }
       gl.drawElements(gl.TRIANGLES, Models.TriangleSetInfo[itr].endIdx - Models.TriangleSetInfo[itr].startIdx, gl.UNSIGNED_SHORT, Models.TriangleSetInfo[itr].startIdx * 2);
     }
+
+    // Draw 2D HUD overlay
+    if (typeof HUD !== 'undefined') {
+      HUD.draw(deltaTime);
+    }
   },
   
   // Toggle collision debug mode

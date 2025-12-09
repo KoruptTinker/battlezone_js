@@ -5,6 +5,14 @@
     z-index: 10;
 }
 
+#hudCanvas {
+    position: absolute;
+    left: 0px;
+    top: 0px;
+    z-index: 60;
+    pointer-events: none;
+}
+
 #myImageCanvas {
     position: absolute;
     left: 0px;

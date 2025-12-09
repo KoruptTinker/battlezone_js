@@ -50,6 +50,9 @@ const Models = {
   // Store initial tank positions for respawn
   tankInitialPositions: [],
   
+  // Mountain boundary for constraining spawns
+  mountainBounds: null,
+  
   // Load triangles from JSON file
   loadTriangles: function(gl) {
     // Reset any stale buffers/state in case we reload
@@ -71,6 +74,7 @@ const Models = {
     this.tankDeadFlags = [];
     this.tankRespawnTimers = [];
     this.tankInitialPositions = [];
+    this.mountainBounds = null;
     this.gameObjects = [];
     this.enemyBullets = [];
 
@@ -139,6 +143,26 @@ const Models = {
         // Identify mountains triangle sets by texture name
         if (inputTriangles[whichSet].material.texture === "mountain.png" || inputTriangles[whichSet].material.texture === "mountain_texture.png") {
           this.mountainsSetIndices.push(whichSet);
+          
+          // Expand mountain bounds to know battlezone limits
+          var verts = inputTriangles[whichSet].vertices;
+          for (var mv = 0; mv < verts.length; mv++) {
+            var vx = verts[mv][0];
+            var vz = verts[mv][2];
+            if (this.mountainBounds === null) {
+              this.mountainBounds = {
+                minX: vx,
+                maxX: vx,
+                minZ: vz,
+                maxZ: vz
+              };
+            } else {
+              this.mountainBounds.minX = Math.min(this.mountainBounds.minX, vx);
+              this.mountainBounds.maxX = Math.max(this.mountainBounds.maxX, vx);
+              this.mountainBounds.minZ = Math.min(this.mountainBounds.minZ, vz);
+              this.mountainBounds.maxZ = Math.max(this.mountainBounds.maxZ, vz);
+            }
+          }
         }
         
         // Identify tank triangle sets by texture name
@@ -946,6 +970,32 @@ const Models = {
     
   },
   
+  // Choose a random spawn position that stays inside the mountain bounds
+  getRandomSpawnPositionWithinMountains: function(fallbackPos) {
+    if (!this.mountainBounds) {
+      // Fallback to initial position if bounds unknown
+      return fallbackPos ? [fallbackPos[0], fallbackPos[1], fallbackPos[2]] : [0, 0, 0];
+    }
+    
+    // Keep a small margin from the mountains so tanks don't clip into them
+    var margin = 0.25;
+    var minX = this.mountainBounds.minX + margin;
+    var maxX = this.mountainBounds.maxX - margin;
+    var minZ = this.mountainBounds.minZ + margin;
+    var maxZ = this.mountainBounds.maxZ - margin;
+    
+    // Safety: if bounds are invalid, use fallback
+    if (minX >= maxX || minZ >= maxZ) {
+      return fallbackPos ? [fallbackPos[0], fallbackPos[1], fallbackPos[2]] : [0, 0, 0];
+    }
+    
+    var spawnX = Math.random() * (maxX - minX) + minX;
+    var spawnZ = Math.random() * (maxZ - minZ) + minZ;
+    var spawnY = fallbackPos ? fallbackPos[1] : 0;
+    
+    return [spawnX, spawnY, spawnZ];
+  },
+  
   // Update tank respawn timers (called each frame)
   updateTankRespawns: function(deltaTime) {
     for (var i = 0; i < this.tankDeadFlags.length; i++) {
@@ -968,10 +1018,13 @@ const Models = {
     this.tankDeadFlags[tankIndex] = false;
     this.tankRespawnTimers[tankIndex] = 0;
     
-    // Reset tank position to initial position
-    this.tankPositions[tankIndex][0] = this.tankInitialPositions[tankIndex][0];
-    this.tankPositions[tankIndex][1] = this.tankInitialPositions[tankIndex][1];
-    this.tankPositions[tankIndex][2] = this.tankInitialPositions[tankIndex][2];
+    // Pick a new random position within the battlezone bounds
+    var spawnPos = this.getRandomSpawnPositionWithinMountains(this.tankInitialPositions[tankIndex]);
+    
+    // Update tank position
+    this.tankPositions[tankIndex][0] = spawnPos[0];
+    this.tankPositions[tankIndex][1] = spawnPos[1];
+    this.tankPositions[tankIndex][2] = spawnPos[2];
     
     // Reset rotation
     this.tankRotationAngles[tankIndex] = 0;
@@ -990,9 +1043,9 @@ const Models = {
     if (tankObj) {
       tankObj.active = true;
       tankObj.collidable = true;
-      tankObj.position[0] = this.tankInitialPositions[tankIndex][0];
-      tankObj.position[1] = this.tankInitialPositions[tankIndex][1];
-      tankObj.position[2] = this.tankInitialPositions[tankIndex][2];
+      tankObj.position[0] = spawnPos[0];
+      tankObj.position[1] = spawnPos[1];
+      tankObj.position[2] = spawnPos[2];
       tankObj.updateWorldBoundingBox();
     }
     

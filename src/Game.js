@@ -9,6 +9,9 @@ function main() {
   
   // Set up input handlers
   Input.setupInput();
+
+  // Initialize HUD overlay
+  HUD.init();
   
   // Set up WebGL
   Renderer.setupWebGL();
