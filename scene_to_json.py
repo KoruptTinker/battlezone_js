@@ -231,21 +231,30 @@ def convert_obj_to_json(obj_filename, json_filename, default_material=None):
     scene_min = [float("inf")] * 3
     scene_max = [float("-inf")] * 3
     
-    faces_by_material_object = defaultdict(list)
+    faces_by_object = defaultdict(list)
+    material_by_object = {}
     
     for face in obj_faces:
         triangles = triangulate_face(face)
         material_name = face['material'] or 'default'
         object_name = face['object'] or 'unknown'
-        key = (material_name, object_name)
-        faces_by_material_object[key].extend(triangles)
+        
+        # Group by object only
+        faces_by_object[object_name].extend(triangles)
+        
+        # Store the first material encountered for each object
+        if object_name not in material_by_object:
+            material_by_object[object_name] = material_name
     
-    print(f"Found {len(faces_by_material_object)} material/object groups")
+    print(f"Found {len(faces_by_object)} objects")
     
     output = []
     
-    for (material_name, object_name), faces in faces_by_material_object.items():
-        print(f"\nProcessing material: {material_name}, object: {object_name}")
+    for object_name, faces in faces_by_object.items():
+        print(f"\nProcessing object: {object_name}")
+        
+        # Use the first material found for this object
+        material_name = material_by_object.get(object_name, 'default')
         
         if material_name in obj_materials:
             material = obj_materials[material_name].copy()

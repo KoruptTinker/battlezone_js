@@ -105,7 +105,7 @@ const Models = {
         this.TriangleSetInfo.push(setData);
         
         // Identify mountains triangle sets by texture name
-        if (inputTriangles[whichSet].material.texture === "mountain.png") {
+        if (inputTriangles[whichSet].material.texture === "mountain.png" || inputTriangles[whichSet].material.texture === "mountain_texture.png") {
           this.mountainsSetIndices.push(whichSet);
         }
         
@@ -434,11 +434,10 @@ const Models = {
     this.selectedSet = -1;
   },
   
-  // Update mountains translation to follow camera (infinite world effect)
+  // Update mountains translation to follow camera
   updateMountainsTranslation: function() {
     if (this.mountainsSetIndices.length > 0 && this.initialCameraEye !== null) {
       // Calculate translation delta from initial camera position
-      // Move mountains with player to create infinite world feeling
       var deltaX = Camera.Eye[0] - this.initialCameraEye[0];
       var deltaY = Camera.Eye[1] - this.initialCameraEye[1];
       var deltaZ = Camera.Eye[2] - this.initialCameraEye[2];
@@ -446,18 +445,9 @@ const Models = {
       // Update all mountains triangle sets
       for (var i = 0; i < this.mountainsSetIndices.length; i++) {
         var setIdx = this.mountainsSetIndices[i];
-        // Reset mountains model matrix to identity (restores original vertex positions)
+        // Reset mountains model matrix and apply translation
         this.modelMat[setIdx] = mat4.create();
-        
-        // Translate mountains by the same amount the camera has moved
-        // This makes them move with the player, creating an infinite world effect
         this.translate(deltaX, deltaY, deltaZ, setIdx);
-      }
-    } else if (this.mountainsSetIndices.length === 0) {
-      // Debug: log if no mountains found (only log once to avoid spam)
-      if (!this._mountainsWarningLogged) {
-        console.warn("No mountains found! Check texture name matching.");
-        this._mountainsWarningLogged = true;
       }
     }
   },
