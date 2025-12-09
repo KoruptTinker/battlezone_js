@@ -25,7 +25,11 @@ const Models = {
   mountainsSetIndices: [],
   tanksSetIndices: [],
   tankForwardDirections: [], // Store forward direction for each tank
+  tankInitialForwardDirections: [], // Store INITIAL forward direction for each tank (for rotation calc)
   tankPositions: [], // Store current position for each tank
+  tankMovementTimers: [], // Track movement time for each tank
+  tankRotatedToPlayer: [], // Track if tank has rotated towards player
+  tankRotationAngles: [], // Store current rotation angle for each tank
   initialCameraEye: null,
   initialCameraTarget: null,
   
@@ -43,7 +47,11 @@ const Models = {
     this.mountainsSetIndices = [];
     this.tanksSetIndices = [];
     this.tankForwardDirections = [];
+    this.tankInitialForwardDirections = [];
     this.tankPositions = [];
+    this.tankMovementTimers = [];
+    this.tankRotatedToPlayer = [];
+    this.tankRotationAngles = [];
     this.gameObjects = [];
 
     // Support loading multiple JSON triangle sets so we can show mountains + tank together
@@ -128,9 +136,16 @@ const Models = {
             forwardDir = [0, 0, 1]; // Default forward direction along Z
           }
           this.tankForwardDirections.push(forwardDir);
+          // Store initial forward direction (for rotation calculations)
+          this.tankInitialForwardDirections.push([forwardDir[0], forwardDir[1], forwardDir[2]]);
           // Initialize position from scene (using avgPos, will be updated from model matrix later)
           // Store initial position from scene data
           this.tankPositions.push([avgPos[0], avgPos[1], avgPos[2]]);
+          // Initialize movement timer to 0
+          this.tankMovementTimers.push(0);
+          // Initialize rotation tracking
+          this.tankRotatedToPlayer.push(false);
+          this.tankRotationAngles.push(0);
         }
         
         // Create Game Objects based on type or texture
@@ -407,18 +422,84 @@ const Models = {
   },
   
   // Update tank positions to move forward
-  updateTankMovement: function() {
+  updateTankMovement: function(deltaTime) {
     // Check if tanks are loaded
     if (this.tanksSetIndices.length === 0 || this.tankPositions.length === 0) {
       return;
     }
     
+    // Default deltaTime if not provided
+    if (deltaTime === undefined) {
+      deltaTime = 0.016; // ~60fps fallback
+    }
+    
     // Movement speed (adjusted for small scale)
-    var moveSpeed = 0.0001; // Small movement per frame
+    var moveSpeed = 0.00075; // Small movement per frame
+    
+    // Time threshold for rotation (5 seconds)
+    var rotationThreshold = 5.0;
     
     for (var i = 0; i < this.tanksSetIndices.length; i++) {
       var setIdx = this.tanksSetIndices[i];
       var forwardDir = this.tankForwardDirections[i];
+      
+      // Update movement timer
+      this.tankMovementTimers[i] += deltaTime;
+      
+      // Check if it's time to rotate towards player (every 5 seconds)
+      if (this.tankMovementTimers[i] >= rotationThreshold) {
+        // Calculate direction to player (Camera.Eye)
+        var toPlayer = [
+          Camera.Eye[0] - this.tankPositions[i][0],
+          0, // Ignore Y for horizontal rotation
+          Camera.Eye[2] - this.tankPositions[i][2]
+        ];
+        
+        // Normalize direction to player
+        var toPlayerLen = Math.sqrt(toPlayer[0] * toPlayer[0] + toPlayer[2] * toPlayer[2]);
+        if (toPlayerLen > 0) {
+          toPlayer[0] /= toPlayerLen;
+          toPlayer[2] /= toPlayerLen;
+        }
+        
+        // Calculate angles using atan2
+        // Initial forward angle (model's original facing direction)
+        var initialAngle = Math.atan2(this.tankInitialForwardDirections[i][0], this.tankInitialForwardDirections[i][2]);
+        // Current forward angle (current movement direction)
+        var currentAngle = Math.atan2(forwardDir[0], forwardDir[2]);
+        // Target angle (direction to player)
+        var targetAngle = Math.atan2(toPlayer[0], toPlayer[2]);
+        
+        // Rotation needed: from initial model orientation to target direction
+        // This is the absolute rotation to apply to the model
+        var rotationAngle = targetAngle - initialAngle;
+        
+        // Normalize angle to [-PI, PI]
+        while (rotationAngle > Math.PI) rotationAngle -= 2 * Math.PI;
+        while (rotationAngle < -Math.PI) rotationAngle += 2 * Math.PI;
+        
+        // Store the rotation angle
+        this.tankRotationAngles[i] = rotationAngle;
+        
+        // Log the angles
+        console.log("=== Tank " + i + " Rotation (Every 5 Seconds) ===");
+        console.log("Tank Position: [" + this.tankPositions[i][0].toFixed(4) + ", " + this.tankPositions[i][1].toFixed(4) + ", " + this.tankPositions[i][2].toFixed(4) + "]");
+        console.log("Player Position: [" + Camera.Eye[0].toFixed(4) + ", " + Camera.Eye[1].toFixed(4) + ", " + Camera.Eye[2].toFixed(4) + "]");
+        console.log("Initial Forward Direction: [" + this.tankInitialForwardDirections[i][0].toFixed(4) + ", " + this.tankInitialForwardDirections[i][2].toFixed(4) + "]");
+        console.log("Initial Forward Angle: " + (initialAngle * 180 / Math.PI).toFixed(2) + " degrees");
+        console.log("Current Forward Angle: " + (currentAngle * 180 / Math.PI).toFixed(2) + " degrees");
+        console.log("Target Angle (to player): " + (targetAngle * 180 / Math.PI).toFixed(2) + " degrees");
+        console.log("Model Rotation Angle: " + (rotationAngle * 180 / Math.PI).toFixed(2) + " degrees");
+        
+        // Update forward direction to face player
+        this.tankForwardDirections[i] = [toPlayer[0], 0, toPlayer[2]];
+        
+        // Mark as has rotated at least once (for model matrix logic)
+        this.tankRotatedToPlayer[i] = true;
+        
+        // Reset timer for next rotation
+        this.tankMovementTimers[i] = 0;
+      }
       
       // Update position (only in XZ plane, keep Y constant)
       this.tankPositions[i][0] += forwardDir[0] * moveSpeed;
@@ -427,20 +508,44 @@ const Models = {
       
       // Update model matrix
       this.modelMat[setIdx] = mat4.create();
-      // Translate to move avgPos to origin
-      this.translate(
-        -this.TriangleSetInfo[setIdx].avgPos[0],
-        -this.TriangleSetInfo[setIdx].avgPos[1],
-        -this.TriangleSetInfo[setIdx].avgPos[2],
-        setIdx
-      );
-      // Then translate to current position
-      this.translate(
-        this.tankPositions[i][0],
-        this.tankPositions[i][1],
-        this.tankPositions[i][2],
-        setIdx
-      );
+      
+      // Only apply rotation if tank has rotated towards player
+      if (this.tankRotatedToPlayer[i]) {
+        // Build matrix: translate to position, rotate, then offset by avgPos
+        // Order in gl-matrix (post-multiply): operations are applied right-to-left to vertex
+        
+        // Step 1: Translate to world position
+        mat4.translate(this.modelMat[setIdx], this.modelMat[setIdx], [
+          this.tankPositions[i][0],
+          this.tankPositions[i][1],
+          this.tankPositions[i][2]
+        ]);
+        
+        // Step 2: Apply rotation around Y axis
+        mat4.rotateY(this.modelMat[setIdx], this.modelMat[setIdx], this.tankRotationAngles[i]);
+        
+        // Step 3: Center the model (move avgPos to origin)
+        mat4.translate(this.modelMat[setIdx], this.modelMat[setIdx], [
+          -this.TriangleSetInfo[setIdx].avgPos[0],
+          -this.TriangleSetInfo[setIdx].avgPos[1],
+          -this.TriangleSetInfo[setIdx].avgPos[2]
+        ]);
+      } else {
+        // No rotation - just translate (original behavior)
+        // Translate to move avgPos to origin, then to current position
+        this.translate(
+          -this.TriangleSetInfo[setIdx].avgPos[0],
+          -this.TriangleSetInfo[setIdx].avgPos[1],
+          -this.TriangleSetInfo[setIdx].avgPos[2],
+          setIdx
+        );
+        this.translate(
+          this.tankPositions[i][0],
+          this.tankPositions[i][1],
+          this.tankPositions[i][2],
+          setIdx
+        );
+      }
     }
   },
   

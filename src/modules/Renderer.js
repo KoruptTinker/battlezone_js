@@ -65,8 +65,8 @@ const Renderer = {
     // Update mountains translation to follow camera
     Models.updateMountainsTranslation();
     
-    // Update enemy tank movement
-    Models.updateTankMovement();
+    // Update enemy tank movement (pass deltaTime for timer)
+    Models.updateTankMovement(deltaTime);
     
     // Update all game objects (new object-oriented approach)
     if (deltaTime > 0) {
