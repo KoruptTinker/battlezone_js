@@ -32,11 +32,15 @@ const Models = {
   tankRotationAngles: [], // Store current rotation angle for each tank
   tankTargetRotationAngles: [], // Store target rotation angle for gradual rotation
   tankRotationSpeed: 0.3, // Rotation speed in radians per second (same as player)
+  tankHasFiredThisRotation: [], // Track if tank has fired during current rotation cycle
   initialCameraEye: null,
   initialCameraTarget: null,
   
   // Game Objects storage
   gameObjects: [],
+  
+  // Enemy bullets (references to EnemyBullet game objects, one per tank)
+  enemyBullets: [],
   
   // Load triangles from JSON file
   loadTriangles: function(gl) {
@@ -55,7 +59,9 @@ const Models = {
     this.tankRotatedToPlayer = [];
     this.tankRotationAngles = [];
     this.tankTargetRotationAngles = [];
+    this.tankHasFiredThisRotation = [];
     this.gameObjects = [];
+    this.enemyBullets = [];
 
     // Support loading multiple JSON triangle sets so we can show mountains + tank together
     var triangleSources = Array.isArray(this.INPUT_TRIANGLES_URLS) ? this.INPUT_TRIANGLES_URLS : [this.INPUT_TRIANGLES_URLS];
@@ -150,6 +156,7 @@ const Models = {
           this.tankRotatedToPlayer.push(false);
           this.tankRotationAngles.push(0);
           this.tankTargetRotationAngles.push(0);
+          this.tankHasFiredThisRotation.push(false);
         }
         
         // Create Game Objects based on type or texture
@@ -160,20 +167,33 @@ const Models = {
             objType = 'tank';
         } else if (inputTriangles[whichSet].material.texture === "mountain.png" || inputTriangles[whichSet].material.texture === "mountain_texture.png") {
             objType = 'mountain';
-        } else if (inputTriangles[whichSet].material.texture === "bullet.png") {
-            objType = 'bullet';
+        } else if (inputTriangles[whichSet].material.texture === "bullet.png" || inputTriangles[whichSet].material.texture === "player_bullet.png") {
+            objType = 'player_bullet';
+        } else if (inputTriangles[whichSet].material.texture === "enemy_bullet.png") {
+            objType = 'enemy_bullet';
         }
 
         var newObj;
-        if (objType === 'bullet') {
+        if (objType === 'bullet' || objType === 'player_bullet') {
             newObj = new Bullet({
-                type: 'bullet',
+                type: 'player_bullet',
                 setIndex: whichSet,
                 avgPos: avgPos,
                 textureName: inputTriangles[whichSet].material.texture,
                 vertices: inputTriangles[whichSet].vertices
             });
             console.log("Created Bullet object");
+        } else if (objType === 'enemy_bullet') {
+            // Create enemy bullet - will be assigned to a tank later
+            newObj = new EnemyBullet({
+                type: 'enemy_bullet',
+                setIndex: whichSet,
+                avgPos: avgPos,
+                textureName: inputTriangles[whichSet].material.texture,
+                vertices: inputTriangles[whichSet].vertices
+            });
+            this.enemyBullets.push(newObj);
+            console.log("Created EnemyBullet object, total: " + this.enemyBullets.length);
         } else {
             newObj = new GameObject({
                 type: objType,
@@ -232,7 +252,23 @@ const Models = {
       
       // Initialize tank positions from scene (extract from model matrices)
       this.initializeTankPositionsFromScene();
+      
+      // Assign enemy bullets to tanks (one bullet per tank)
+      this.assignEnemyBulletsToTanks();
     } 
+  },
+  
+  // Assign enemy bullets to tanks (one per tank)
+  assignEnemyBulletsToTanks: function() {
+    var numTanks = this.tanksSetIndices.length;
+    var numBullets = this.enemyBullets.length;
+    
+    console.log("Assigning " + numBullets + " enemy bullets to " + numTanks + " tanks");
+    
+    for (var i = 0; i < Math.min(numTanks, numBullets); i++) {
+      this.enemyBullets[i].ownerTankIndex = i;
+      console.log("Assigned enemy bullet " + i + " to tank " + i);
+    }
   },
   
   // Calculate the forward direction of a tank from its vertex set
@@ -494,6 +530,9 @@ const Models = {
         // Mark as has rotated at least once (for model matrix logic)
         this.tankRotatedToPlayer[i] = true;
         
+        // Reset "has fired" flag so tank can fire again after completing this rotation
+        this.tankHasFiredThisRotation[i] = false;
+        
         // Reset timer for next rotation
         this.tankMovementTimers[i] = 0;
       }
@@ -517,6 +556,14 @@ const Models = {
         if (Math.abs(angleDiff) <= maxRotationStep) {
           // Close enough, snap to target
           this.tankRotationAngles[i] = targetRotation;
+          
+          // Fire enemy bullet when tank finishes rotating to face player
+          if (!this.tankHasFiredThisRotation[i] && i < this.enemyBullets.length) {
+            var bullet = this.enemyBullets[i];
+            if (bullet && bullet.fireFromTank(this.tankPositions[i], this.tankForwardDirections[i])) {
+              this.tankHasFiredThisRotation[i] = true;
+            }
+          }
         } else if (angleDiff > 0) {
           // Rotate counterclockwise (positive)
           this.tankRotationAngles[i] += maxRotationStep;
