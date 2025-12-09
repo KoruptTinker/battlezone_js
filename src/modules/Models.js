@@ -105,7 +105,7 @@ const Models = {
         this.TriangleSetInfo.push(setData);
         
         // Identify mountains triangle sets by texture name
-        if (inputTriangles[whichSet].material.texture === "mountain_texture.png") {
+        if (inputTriangles[whichSet].material.texture === "mountain.png") {
           this.mountainsSetIndices.push(whichSet);
         }
         
@@ -124,6 +124,9 @@ const Models = {
             forwardDir = [0, 0, 1]; // Default forward direction along Z
           }
           this.tankForwardDirections.push(forwardDir);
+          // Initialize position from scene (using avgPos, will be updated from model matrix later)
+          // Store initial position from scene data
+          this.tankPositions.push([avgPos[0], avgPos[1], avgPos[2]]);
         }
       } 
       
@@ -168,8 +171,8 @@ const Models = {
         console.error("Error loading textures:", error);
       });
       
-      // Initialize tank positions
-      this.initializeTankPositions();
+      // Initialize tank positions from scene (extract from model matrices)
+      this.initializeTankPositionsFromScene();
     } 
   },
   
@@ -336,29 +339,35 @@ const Models = {
     return forward;
   },
   
-  // Initialize tank positions to (0.5, 0, 0.3)
-  initializeTankPositions: function() {
+  // Initialize tank positions from scene (extract world position from model matrices)
+  initializeTankPositionsFromScene: function() {
     for (var i = 0; i < this.tanksSetIndices.length; i++) {
       var setIdx = this.tanksSetIndices[i];
-      var initialPos = [0.5, 0, 0.3];
-      this.tankPositions.push([initialPos[0], initialPos[1], initialPos[2]]);
+      var modelMat = this.modelMat[setIdx];
       
-      // Reset model matrix and position tank
-      this.modelMat[setIdx] = mat4.create();
-      // Translate to move avgPos to origin
-      this.translate(
-        -this.TriangleSetInfo[setIdx].avgPos[0],
-        -this.TriangleSetInfo[setIdx].avgPos[1],
-        -this.TriangleSetInfo[setIdx].avgPos[2],
-        setIdx
-      );
-      // Then translate to desired world position
-      this.translate(
-        initialPos[0],
-        initialPos[1],
-        initialPos[2],
-        setIdx
-      );
+      // Extract translation from model matrix (last column contains translation)
+      // Model matrix is 4x4, translation is in indices 12, 13, 14
+      var worldPos = [
+        modelMat[12],
+        modelMat[13],
+        modelMat[14]
+      ];
+      
+      // If model matrix is identity (no transformation), use avgPos
+      if (modelMat[12] === 0 && modelMat[13] === 0 && modelMat[14] === 0) {
+        worldPos = [
+          this.TriangleSetInfo[setIdx].avgPos[0],
+          this.TriangleSetInfo[setIdx].avgPos[1],
+          this.TriangleSetInfo[setIdx].avgPos[2]
+        ];
+      }
+      
+      // Update tank position from scene
+      if (i < this.tankPositions.length) {
+        this.tankPositions[i][0] = worldPos[0];
+        this.tankPositions[i][1] = worldPos[1];
+        this.tankPositions[i][2] = worldPos[2];
+      }
     }
   },
   
@@ -425,10 +434,11 @@ const Models = {
     this.selectedSet = -1;
   },
   
-  // Update mountains translation to follow camera
+  // Update mountains translation to follow camera (infinite world effect)
   updateMountainsTranslation: function() {
     if (this.mountainsSetIndices.length > 0 && this.initialCameraEye !== null) {
       // Calculate translation delta from initial camera position
+      // Move mountains with player to create infinite world feeling
       var deltaX = Camera.Eye[0] - this.initialCameraEye[0];
       var deltaY = Camera.Eye[1] - this.initialCameraEye[1];
       var deltaZ = Camera.Eye[2] - this.initialCameraEye[2];
@@ -436,9 +446,18 @@ const Models = {
       // Update all mountains triangle sets
       for (var i = 0; i < this.mountainsSetIndices.length; i++) {
         var setIdx = this.mountainsSetIndices[i];
-        // Reset mountains model matrix and apply translation
+        // Reset mountains model matrix to identity (restores original vertex positions)
         this.modelMat[setIdx] = mat4.create();
+        
+        // Translate mountains by the same amount the camera has moved
+        // This makes them move with the player, creating an infinite world effect
         this.translate(deltaX, deltaY, deltaZ, setIdx);
+      }
+    } else if (this.mountainsSetIndices.length === 0) {
+      // Debug: log if no mountains found (only log once to avoid spam)
+      if (!this._mountainsWarningLogged) {
+        console.warn("No mountains found! Check texture name matching.");
+        this._mountainsWarningLogged = true;
       }
     }
   },
