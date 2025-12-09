@@ -42,6 +42,9 @@ const Renderer = {
     // Update mountains translation to follow camera
     Models.updateMountainsTranslation();
     
+    // Update tank movement
+    Models.updateTankMovement();
+    
     // vertex buffer: activate and feed into vertex shader
     gl.bindBuffer(gl.ARRAY_BUFFER, Models.vertexBuffer);
     gl.vertexAttribPointer(Shaders.vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0);

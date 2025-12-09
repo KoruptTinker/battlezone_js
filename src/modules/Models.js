@@ -24,6 +24,8 @@ const Models = {
   selectedSet: -1,
   mountainsSetIndices: [],
   tanksSetIndices: [],
+  tankForwardDirections: [], // Store forward direction for each tank
+  tankPositions: [], // Store current position for each tank
   initialCameraEye: null,
   initialCameraTarget: null,
   
@@ -37,6 +39,8 @@ const Models = {
     this.selectedSet = -1;
     this.mountainsSetIndices = [];
     this.tanksSetIndices = [];
+    this.tankForwardDirections = [];
+    this.tankPositions = [];
 
     // Support loading multiple JSON triangle sets so we can show mountains + tank together
     var triangleSources = Array.isArray(this.INPUT_TRIANGLES_URLS) ? this.INPUT_TRIANGLES_URLS : [this.INPUT_TRIANGLES_URLS];
@@ -101,13 +105,25 @@ const Models = {
         this.TriangleSetInfo.push(setData);
         
         // Identify mountains triangle sets by texture name
-        if (inputTriangles[whichSet].material.texture === "mountain.png") {
+        if (inputTriangles[whichSet].material.texture === "mountain_texture.png") {
           this.mountainsSetIndices.push(whichSet);
         }
         
         // Identify tank triangle sets by texture name
         if (inputTriangles[whichSet].material.texture === "enemy_tank.png") {
           this.tanksSetIndices.push(whichSet);
+          // Calculate forward direction from tank vertices
+          var forwardDir = this.calculateTankForwardDirection(inputTriangles[whichSet].vertices);
+          // Project onto XZ plane (set Y to 0 and renormalize)
+          forwardDir[1] = 0;
+          var len = Math.sqrt(forwardDir[0] * forwardDir[0] + forwardDir[2] * forwardDir[2]);
+          if (len > 0) {
+            forwardDir[0] /= len;
+            forwardDir[2] /= len;
+          } else {
+            forwardDir = [0, 0, 1]; // Default forward direction along Z
+          }
+          this.tankForwardDirections.push(forwardDir);
         }
       } 
       
@@ -152,8 +168,236 @@ const Models = {
         console.error("Error loading textures:", error);
       });
       
-      // Position tanks will be done after initialCameraEye is set in main()
+      // Initialize tank positions
+      this.initializeTankPositions();
     } 
+  },
+  
+  // Calculate the forward direction of a tank from its vertex set
+  calculateTankForwardDirection: function(vertices) {
+    if (vertices.length === 0) {
+      return [0, 0, 1]; // Default forward direction
+    }
+    
+    // Calculate centroid
+    var centroid = [0, 0, 0];
+    for (var i = 0; i < vertices.length; i++) {
+      centroid[0] += vertices[i][0];
+      centroid[1] += vertices[i][1];
+      centroid[2] += vertices[i][2];
+    }
+    centroid[0] /= vertices.length;
+    centroid[1] /= vertices.length;
+    centroid[2] /= vertices.length;
+    
+    // Find min and max values for each axis to determine principal axis
+    var minX = vertices[0][0], maxX = vertices[0][0];
+    var minY = vertices[0][1], maxY = vertices[0][1];
+    var minZ = vertices[0][2], maxZ = vertices[0][2];
+    
+    for (var i = 1; i < vertices.length; i++) {
+      var v = vertices[i];
+      if (v[0] < minX) minX = v[0];
+      if (v[0] > maxX) maxX = v[0];
+      if (v[1] < minY) minY = v[1];
+      if (v[1] > maxY) maxY = v[1];
+      if (v[2] < minZ) minZ = v[2];
+      if (v[2] > maxZ) maxZ = v[2];
+    }
+    
+    // Calculate extents along each axis
+    var extentX = maxX - minX;
+    var extentY = maxY - minY;
+    var extentZ = maxZ - minZ;
+    
+    // Find the axis with the largest extent (principal axis)
+    var principalAxis;
+    var forward;
+    
+    if (extentX >= extentY && extentX >= extentZ) {
+      // X axis is the principal axis
+      principalAxis = 0;
+      // Find average position of vertices on each side of centroid along X
+      var frontSum = [0, 0, 0], backSum = [0, 0, 0];
+      var frontCount = 0, backCount = 0;
+      for (var i = 0; i < vertices.length; i++) {
+        if (vertices[i][0] > centroid[0]) {
+          frontSum[0] += vertices[i][0];
+          frontSum[1] += vertices[i][1];
+          frontSum[2] += vertices[i][2];
+          frontCount++;
+        } else {
+          backSum[0] += vertices[i][0];
+          backSum[1] += vertices[i][1];
+          backSum[2] += vertices[i][2];
+          backCount++;
+        }
+      }
+      if (frontCount > 0 && backCount > 0) {
+        frontSum[0] /= frontCount;
+        frontSum[1] /= frontCount;
+        frontSum[2] /= frontCount;
+        backSum[0] /= backCount;
+        backSum[1] /= backCount;
+        backSum[2] /= backCount;
+        forward = [
+          frontSum[0] - backSum[0],
+          frontSum[1] - backSum[1],
+          frontSum[2] - backSum[2]
+        ];
+      } else {
+        forward = [1, 0, 0]; // Default along X
+      }
+    } else if (extentY >= extentX && extentY >= extentZ) {
+      // Y axis is the principal axis
+      principalAxis = 1;
+      // Find average position of vertices on each side of centroid along Y
+      var frontSum = [0, 0, 0], backSum = [0, 0, 0];
+      var frontCount = 0, backCount = 0;
+      for (var i = 0; i < vertices.length; i++) {
+        if (vertices[i][1] > centroid[1]) {
+          frontSum[0] += vertices[i][0];
+          frontSum[1] += vertices[i][1];
+          frontSum[2] += vertices[i][2];
+          frontCount++;
+        } else {
+          backSum[0] += vertices[i][0];
+          backSum[1] += vertices[i][1];
+          backSum[2] += vertices[i][2];
+          backCount++;
+        }
+      }
+      if (frontCount > 0 && backCount > 0) {
+        frontSum[0] /= frontCount;
+        frontSum[1] /= frontCount;
+        frontSum[2] /= frontCount;
+        backSum[0] /= backCount;
+        backSum[1] /= backCount;
+        backSum[2] /= backCount;
+        forward = [
+          frontSum[0] - backSum[0],
+          frontSum[1] - backSum[1],
+          frontSum[2] - backSum[2]
+        ];
+      } else {
+        forward = [0, 1, 0]; // Default along Y
+      }
+    } else {
+      // Z axis is the principal axis (most common for tanks)
+      principalAxis = 2;
+      // Find average position of vertices on each side of centroid along Z
+      var frontSum = [0, 0, 0], backSum = [0, 0, 0];
+      var frontCount = 0, backCount = 0;
+      for (var i = 0; i < vertices.length; i++) {
+        if (vertices[i][2] > centroid[2]) {
+          frontSum[0] += vertices[i][0];
+          frontSum[1] += vertices[i][1];
+          frontSum[2] += vertices[i][2];
+          frontCount++;
+        } else {
+          backSum[0] += vertices[i][0];
+          backSum[1] += vertices[i][1];
+          backSum[2] += vertices[i][2];
+          backCount++;
+        }
+      }
+      if (frontCount > 0 && backCount > 0) {
+        frontSum[0] /= frontCount;
+        frontSum[1] /= frontCount;
+        frontSum[2] /= frontCount;
+        backSum[0] /= backCount;
+        backSum[1] /= backCount;
+        backSum[2] /= backCount;
+        forward = [
+          frontSum[0] - backSum[0],
+          frontSum[1] - backSum[1],
+          frontSum[2] - backSum[2]
+        ];
+      } else {
+        forward = [0, 0, 1]; // Default along Z
+      }
+    }
+    
+    // Normalize the forward vector
+    var len = Math.sqrt(forward[0] * forward[0] + forward[1] * forward[1] + forward[2] * forward[2]);
+    if (len > 0) {
+      forward[0] /= len;
+      forward[1] /= len;
+      forward[2] /= len;
+    } else {
+      forward = [0, 0, 1]; // Default forward direction
+    }
+    
+    // Reverse the direction (tank was moving backward, now it will move forward)
+    forward[0] = -forward[0];
+    forward[1] = -forward[1];
+    forward[2] = -forward[2];
+    
+    return forward;
+  },
+  
+  // Initialize tank positions to (0.5, 0, 0.3)
+  initializeTankPositions: function() {
+    for (var i = 0; i < this.tanksSetIndices.length; i++) {
+      var setIdx = this.tanksSetIndices[i];
+      var initialPos = [0.5, 0, 0.3];
+      this.tankPositions.push([initialPos[0], initialPos[1], initialPos[2]]);
+      
+      // Reset model matrix and position tank
+      this.modelMat[setIdx] = mat4.create();
+      // Translate to move avgPos to origin
+      this.translate(
+        -this.TriangleSetInfo[setIdx].avgPos[0],
+        -this.TriangleSetInfo[setIdx].avgPos[1],
+        -this.TriangleSetInfo[setIdx].avgPos[2],
+        setIdx
+      );
+      // Then translate to desired world position
+      this.translate(
+        initialPos[0],
+        initialPos[1],
+        initialPos[2],
+        setIdx
+      );
+    }
+  },
+  
+  // Update tank positions to move forward
+  updateTankMovement: function() {
+    // Check if tanks are loaded
+    if (this.tanksSetIndices.length === 0 || this.tankPositions.length === 0) {
+      return;
+    }
+    
+    // Movement speed (adjusted for small scale)
+    var moveSpeed = 0.0001; // Small movement per frame
+    
+    for (var i = 0; i < this.tanksSetIndices.length; i++) {
+      var setIdx = this.tanksSetIndices[i];
+      var forwardDir = this.tankForwardDirections[i];
+      
+      // Update position (only in XZ plane, keep Y constant)
+      this.tankPositions[i][0] += forwardDir[0] * moveSpeed;
+      // Y remains constant (don't update this.tankPositions[i][1])
+      this.tankPositions[i][2] += forwardDir[2] * moveSpeed;
+      
+      // Update model matrix
+      this.modelMat[setIdx] = mat4.create();
+      // Translate to move avgPos to origin
+      this.translate(
+        -this.TriangleSetInfo[setIdx].avgPos[0],
+        -this.TriangleSetInfo[setIdx].avgPos[1],
+        -this.TriangleSetInfo[setIdx].avgPos[2],
+        setIdx
+      );
+      // Then translate to current position
+      this.translate(
+        this.tankPositions[i][0],
+        this.tankPositions[i][1],
+        this.tankPositions[i][2],
+        setIdx
+      );
+    }
   },
   
   // Transformation functions
