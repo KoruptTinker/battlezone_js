@@ -331,11 +331,6 @@ const Models = {
       forward = [0, 0, 1]; // Default forward direction
     }
     
-    // Reverse the direction (tank was moving backward, now it will move forward)
-    forward[0] = -forward[0];
-    forward[1] = -forward[1];
-    forward[2] = -forward[2];
-    
     return forward;
   },
   

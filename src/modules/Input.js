@@ -1,44 +1,101 @@
 // Input handling for keyboard events
 
 const Input = {
+  // Track which keys are currently pressed
+  keys: {},
+  
+  // Movement speeds (per second)
+  yawSpeed: 0.3,        // radians per second
+  moveSpeed: 0.1,       // units per second
+  verticalSpeed: 0.4,   // units per second
+  
   // Initialize input handlers
   setupInput: function() {
+    var self = this;
+    
     document.addEventListener('keydown', function (e) {
       var key = e.key;
       var keyLower = key.toLowerCase();
       
-      if (keyLower === "d") {
-        Camera.yaw(-0.03);
-      } else if (keyLower === "a") {
-        Camera.yaw(0.03);
+      // Prevent default behavior for game keys
+      if (keyLower === "w" || keyLower === "a" || keyLower === "s" || keyLower === "d" || 
+          keyLower === "q" || keyLower === "e" || 
+          key === "ArrowUp" || key === "ArrowDown" || 
+          key === "ArrowLeft" || key === "ArrowRight") {
+        e.preventDefault();
       }
-      else if (key === "ArrowLeft") {
-        Camera.yaw(0.03);
-      } else if (key === "ArrowRight") {
-        Camera.yaw(-0.03);
-      }
-      // Forward/backward movement - W/S (case insensitive) and Up/Down arrows
-      else if (key === "ArrowUp" || keyLower === "w") {
-        // Move forward
-        Camera.moveForward(0.015);
+      
+      // Track key presses
+      if (keyLower === "d" || key === "ArrowRight") {
+        self.keys.yawRight = true;
+      } else if (keyLower === "a" || key === "ArrowLeft") {
+        self.keys.yawLeft = true;
+      } else if (key === "ArrowUp" || keyLower === "w") {
+        self.keys.moveForward = true;
       } else if (key === "ArrowDown" || keyLower === "s") {
-        // Move backward
-        Camera.moveForward(-0.015);
-      }
-      // Up/down movement - Q/E (case insensitive)
-      else if (keyLower === "q") {
-        // Move down
-        Camera.moveUp(-0.015);
+        self.keys.moveBackward = true;
+      } else if (keyLower === "q") {
+        self.keys.moveDown = true;
       } else if (keyLower === "e") {
-        // Move up
-        Camera.moveUp(0.015);
-      }
-      // ESC key to reset
-      else if (key === "Escape") {
+        self.keys.moveUp = true;
+      } else if (key === "Escape") {
+        // ESC key still handled immediately for reset
         Camera.resetViewingCoordinates();
         Models.resetModels();
       }
     });
+    
+    document.addEventListener('keyup', function (e) {
+      var key = e.key;
+      var keyLower = key.toLowerCase();
+      
+      // Release key presses
+      if (keyLower === "d" || key === "ArrowRight") {
+        self.keys.yawRight = false;
+      } else if (keyLower === "a" || key === "ArrowLeft") {
+        self.keys.yawLeft = false;
+      } else if (key === "ArrowUp" || keyLower === "w") {
+        self.keys.moveForward = false;
+      } else if (key === "ArrowDown" || keyLower === "s") {
+        self.keys.moveBackward = false;
+      } else if (keyLower === "q") {
+        self.keys.moveDown = false;
+      } else if (keyLower === "e") {
+        self.keys.moveUp = false;
+      }
+    });
+    
+    // Handle window blur to prevent stuck keys
+    window.addEventListener('blur', function() {
+      self.keys = {};
+    });
+  },
+  
+  // Update movement based on delta time
+  update: function(deltaTime) {
+    // Yaw rotation
+    if (this.keys.yawRight) {
+      Camera.yaw(-this.yawSpeed * deltaTime);
+    }
+    if (this.keys.yawLeft) {
+      Camera.yaw(this.yawSpeed * deltaTime);
+    }
+    
+    // Forward/backward movement
+    if (this.keys.moveForward) {
+      Camera.moveForward(this.moveSpeed * deltaTime);
+    }
+    if (this.keys.moveBackward) {
+      Camera.moveForward(-this.moveSpeed * deltaTime);
+    }
+    
+    // Vertical movement
+    if (this.keys.moveUp) {
+      Camera.moveUp(this.verticalSpeed * deltaTime);
+    }
+    if (this.keys.moveDown) {
+      Camera.moveUp(-this.verticalSpeed * deltaTime);
+    }
   }
 };
 

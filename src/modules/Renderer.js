@@ -2,6 +2,7 @@
 
 const Renderer = {
   gl: null,
+  lastFrameTime: null,
   
   // Set up WebGL environment
   setupWebGL: function() {
@@ -35,6 +36,25 @@ const Renderer = {
   // Render the loaded model
   renderTriangles: function() {
     var gl = this.gl;
+    
+    // Calculate delta time
+    var currentTime = performance.now();
+    var deltaTime = 0;
+    if (this.lastFrameTime !== null) {
+      deltaTime = (currentTime - this.lastFrameTime) / 1000.0; // Convert to seconds
+    }
+    this.lastFrameTime = currentTime;
+    
+    // Cap delta time to prevent large jumps
+    if (deltaTime > 0.1) {
+      deltaTime = 0.1;
+    }
+    
+    // Update input-based movement
+    if (deltaTime > 0) {
+      Input.update(deltaTime);
+    }
+    
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     requestAnimationFrame(() => this.renderTriangles());
