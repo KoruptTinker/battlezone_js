@@ -265,6 +265,9 @@ def convert_obj_to_json(obj_filename, json_filename, default_material=None):
         if object_texture:
             material['texture'] = object_texture
         
+        # Extract type using same logic as get_object_texture
+        object_type = object_name.split('.')[0] if object_name else None
+        
         vertex_map = {}
         vertices = []
         normals = []
@@ -331,6 +334,7 @@ def convert_obj_to_json(obj_filename, json_filename, default_material=None):
                 "alpha": material.get('alpha', 1.0),
                 "texture": material.get('texture')
             },
+            "type": object_type,
             "vertices": vertices,
             "normals": normals,
             "uvs": uvs,

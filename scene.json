@@ -20,6 +20,7 @@
       "alpha": 1.0,
       "texture": "mountain.png"
     },
+    "type": "mountain",
     "vertices": [
       [
         1.322326,
@@ -62106,6 +62107,7 @@
       "alpha": 1.0,
       "texture": "enemy_tank.png"
     },
+    "type": "enemy_tank",
     "vertices": [
       [
         -0.705937,
@@ -67160,6 +67162,7 @@
       "alpha": 1.0,
       "texture": "house.png"
     },
+    "type": "house",
     "vertices": [
       [
         0.872711,
@@ -69150,6 +69153,7 @@
       "alpha": 1.0,
       "texture": "house.png"
     },
+    "type": "house",
     "vertices": [
       [
         -0.228881,
@@ -71140,6 +71144,7 @@
       "alpha": 1.0,
       "texture": "house.png"
     },
+    "type": "house",
     "vertices": [
       [
         -0.939162,
@@ -73130,6 +73135,7 @@
       "alpha": 1.0,
       "texture": "house.png"
     },
+    "type": "house",
     "vertices": [
       [
         0.657228,
@@ -75120,6 +75126,7 @@
       "alpha": 1.0,
       "texture": "house.png"
     },
+    "type": "house",
     "vertices": [
       [
         -0.806709,
