@@ -42,6 +42,14 @@ const Models = {
   // Enemy bullets (references to EnemyBullet game objects, one per tank)
   enemyBullets: [],
   
+  // Tank death/respawn state
+  tankDeadFlags: [], // Track which tanks are dead
+  tankRespawnTimers: [], // Timer for each tank's respawn
+  tankRespawnDelay: 3.0, // Seconds before a tank respawns
+  
+  // Store initial tank positions for respawn
+  tankInitialPositions: [],
+  
   // Load triangles from JSON file
   loadTriangles: function(gl) {
     // Reset any stale buffers/state in case we reload
@@ -60,6 +68,9 @@ const Models = {
     this.tankRotationAngles = [];
     this.tankTargetRotationAngles = [];
     this.tankHasFiredThisRotation = [];
+    this.tankDeadFlags = [];
+    this.tankRespawnTimers = [];
+    this.tankInitialPositions = [];
     this.gameObjects = [];
     this.enemyBullets = [];
 
@@ -157,6 +168,11 @@ const Models = {
           this.tankRotationAngles.push(0);
           this.tankTargetRotationAngles.push(0);
           this.tankHasFiredThisRotation.push(false);
+          // Initialize death/respawn tracking
+          this.tankDeadFlags.push(false);
+          this.tankRespawnTimers.push(0);
+          // Store initial position for respawn
+          this.tankInitialPositions.push([avgPos[0], avgPos[1], avgPos[2]]);
         }
         
         // Create Game Objects based on type or texture
@@ -182,7 +198,6 @@ const Models = {
                 textureName: inputTriangles[whichSet].material.texture,
                 vertices: inputTriangles[whichSet].vertices
             });
-            console.log("Created Bullet object");
         } else if (objType === 'enemy_bullet') {
             // Create enemy bullet - will be assigned to a tank later
             newObj = new EnemyBullet({
@@ -193,16 +208,16 @@ const Models = {
                 vertices: inputTriangles[whichSet].vertices
             });
             this.enemyBullets.push(newObj);
-            console.log("Created EnemyBullet object, total: " + this.enemyBullets.length);
         } else {
             newObj = new GameObject({
                 type: objType,
                 setIndex: whichSet,
                 avgPos: avgPos,
+                position: [...avgPos], // Initialize position to avgPos for correct bounding box
                 textureName: inputTriangles[whichSet].material.texture,
                 vertices: inputTriangles[whichSet].vertices,
                 isStatic: objType !== 'tank' && objType !== 'bullet',
-                collidable: true
+                collidable: objType !== 'mountain' // Mountains are background only, no collision
             });
         }
         
@@ -263,11 +278,8 @@ const Models = {
     var numTanks = this.tanksSetIndices.length;
     var numBullets = this.enemyBullets.length;
     
-    console.log("Assigning " + numBullets + " enemy bullets to " + numTanks + " tanks");
-    
     for (var i = 0; i < Math.min(numTanks, numBullets); i++) {
       this.enemyBullets[i].ownerTankIndex = i;
-      console.log("Assigned enemy bullet " + i + " to tank " + i);
     }
   },
   
@@ -461,6 +473,86 @@ const Models = {
     }
   },
   
+  // Check if a tank at position would collide with buildings or player
+  checkTankCollision: function(tankIndex, newPosX, newPosZ) {
+    var setIdx = this.tanksSetIndices[tankIndex];
+    var tankObj = this.getGameObjectBySetIndex(setIdx);
+    if (!tankObj || !tankObj.localBoundingBox) return false;
+    
+    // Calculate potential new bounding box for the tank
+    var offset = [
+      newPosX - tankObj.avgPos[0],
+      tankObj.position[1] - tankObj.avgPos[1],
+      newPosZ - tankObj.avgPos[2]
+    ];
+    
+    var tankBox = {
+      min: [
+        tankObj.localBoundingBox.min[0] + offset[0],
+        tankObj.localBoundingBox.min[1] + offset[1],
+        tankObj.localBoundingBox.min[2] + offset[2]
+      ],
+      max: [
+        tankObj.localBoundingBox.max[0] + offset[0],
+        tankObj.localBoundingBox.max[1] + offset[1],
+        tankObj.localBoundingBox.max[2] + offset[2]
+      ]
+    };
+    
+    // Check collision with houses and other tanks
+    for (var i = 0; i < this.gameObjects.length; i++) {
+      var obj = this.gameObjects[i];
+      
+      // Skip self, inactive objects, non-collidable objects
+      if (!obj.active || !obj.collidable || obj.setIndex === setIdx) continue;
+      
+      // Check against houses (buildings)
+      if (obj.type === 'house') {
+        if (this.checkAABBOverlap(tankBox, obj.boundingBox)) {
+          return true; // Collision detected with building
+        }
+      }
+      
+      // Check against other tanks
+      if ((obj.type === 'tank' || obj.type === 'enemy_tank') && obj.setIndex !== setIdx) {
+        if (this.checkAABBOverlap(tankBox, obj.boundingBox)) {
+          return true; // Collision detected with another tank
+        }
+      }
+    }
+    
+    // Check collision with player (Camera.Eye)
+    // Create a simple bounding box around the player
+    var playerRadius = 0.1; // Player collision radius
+    var playerBox = {
+      min: [
+        Camera.Eye[0] - playerRadius,
+        Camera.Eye[1] - 0.2, // Some height for player
+        Camera.Eye[2] - playerRadius
+      ],
+      max: [
+        Camera.Eye[0] + playerRadius,
+        Camera.Eye[1] + 0.2,
+        Camera.Eye[2] + playerRadius
+      ]
+    };
+    
+    if (this.checkAABBOverlap(tankBox, playerBox)) {
+      return true; // Collision detected with player
+    }
+    
+    return false; // No collision
+  },
+  
+  // Helper: Check if two AABBs overlap
+  checkAABBOverlap: function(boxA, boxB) {
+    return (
+      boxA.min[0] <= boxB.max[0] && boxA.max[0] >= boxB.min[0] &&
+      boxA.min[1] <= boxB.max[1] && boxA.max[1] >= boxB.min[1] &&
+      boxA.min[2] <= boxB.max[2] && boxA.max[2] >= boxB.min[2]
+    );
+  },
+
   // Update tank positions to move forward
   updateTankMovement: function(deltaTime) {
     // Check if tanks are loaded
@@ -473,6 +565,9 @@ const Models = {
       deltaTime = 0.016; // ~60fps fallback
     }
     
+    // Update respawn timers
+    this.updateTankRespawns(deltaTime);
+    
     // Movement speed (adjusted for small scale)
     var moveSpeed = 0.00075; // Small movement per frame
     
@@ -480,6 +575,11 @@ const Models = {
     var rotationThreshold = 5.0;
     
     for (var i = 0; i < this.tanksSetIndices.length; i++) {
+      // Skip dead tanks
+      if (this.tankDeadFlags[i]) {
+        continue;
+      }
+      
       var setIdx = this.tanksSetIndices[i];
       var forwardDir = this.tankForwardDirections[i];
       
@@ -520,13 +620,6 @@ const Models = {
         // Store the TARGET rotation angle (will gradually interpolate towards this)
         this.tankTargetRotationAngles[i] = targetRotationAngle;
         
-        // Log the angles
-        console.log("=== Tank " + i + " New Target (Every 5 Seconds) ===");
-        console.log("Tank Position: [" + this.tankPositions[i][0].toFixed(4) + ", " + this.tankPositions[i][1].toFixed(4) + ", " + this.tankPositions[i][2].toFixed(4) + "]");
-        console.log("Player Position: [" + Camera.Eye[0].toFixed(4) + ", " + Camera.Eye[1].toFixed(4) + ", " + Camera.Eye[2].toFixed(4) + "]");
-        console.log("Current Rotation Angle: " + (this.tankRotationAngles[i] * 180 / Math.PI).toFixed(2) + " degrees");
-        console.log("Target Rotation Angle: " + (targetRotationAngle * 180 / Math.PI).toFixed(2) + " degrees");
-        
         // Mark as has rotated at least once (for model matrix logic)
         this.tankRotatedToPlayer[i] = true;
         
@@ -558,10 +651,14 @@ const Models = {
           this.tankRotationAngles[i] = targetRotation;
           
           // Fire enemy bullet when tank finishes rotating to face player
+          // Only fire if game is playing and tank is alive
           if (!this.tankHasFiredThisRotation[i] && i < this.enemyBullets.length) {
-            var bullet = this.enemyBullets[i];
-            if (bullet && bullet.fireFromTank(this.tankPositions[i], this.tankForwardDirections[i])) {
-              this.tankHasFiredThisRotation[i] = true;
+            var canFire = typeof GameState === 'undefined' || GameState.isPlaying();
+            if (canFire && !this.tankDeadFlags[i]) {
+              var bullet = this.enemyBullets[i];
+              if (bullet && bullet.fireFromTank(this.tankPositions[i], this.tankForwardDirections[i])) {
+                this.tankHasFiredThisRotation[i] = true;
+              }
             }
           }
         } else if (angleDiff > 0) {
@@ -583,10 +680,17 @@ const Models = {
         this.tankForwardDirections[i] = [Math.sin(newAngle), 0, Math.cos(newAngle)];
       }
       
-      // Update position (only in XZ plane, keep Y constant)
-      this.tankPositions[i][0] += forwardDir[0] * moveSpeed;
-      // Y remains constant (don't update this.tankPositions[i][1])
-      this.tankPositions[i][2] += forwardDir[2] * moveSpeed;
+      // Calculate potential new position
+      var newPosX = this.tankPositions[i][0] + forwardDir[0] * moveSpeed;
+      var newPosZ = this.tankPositions[i][2] + forwardDir[2] * moveSpeed;
+      
+      // Check for collisions before moving
+      if (!this.checkTankCollision(i, newPosX, newPosZ)) {
+        // No collision - update position (only in XZ plane, keep Y constant)
+        this.tankPositions[i][0] = newPosX;
+        this.tankPositions[i][2] = newPosZ;
+      }
+      // If collision detected, tank simply doesn't move this frame
       
       // Update model matrix
       this.modelMat[setIdx] = mat4.create();
@@ -627,6 +731,15 @@ const Models = {
           this.tankPositions[i][2],
           setIdx
         );
+      }
+      
+      // Update tank game object's position and bounding box for collision detection
+      var tankObj = this.getGameObjectBySetIndex(setIdx);
+      if (tankObj) {
+        tankObj.position[0] = this.tankPositions[i][0];
+        tankObj.position[1] = this.tankPositions[i][1];
+        tankObj.position[2] = this.tankPositions[i][2];
+        tankObj.updateWorldBoundingBox();
       }
     }
   },
@@ -784,13 +897,6 @@ const Models = {
       tank2SetIdx
     );
     
-    console.log("Positioned 2 tanks horizontally in front of camera");
-    console.log("Initial Camera Eye:", eyePos);
-    console.log("Initial Camera Target:", targetPos);
-    console.log("Forward direction:", forward);
-    console.log("Base position:", basePos);
-    console.log("Tank 1 position:", tank1Pos);
-    console.log("Tank 2 position:", tank2Pos);
   },
 
   // Update all game objects
@@ -810,6 +916,123 @@ const Models = {
       }
     }
     return null;
+  },
+  
+  // Get tank index by set index
+  getTankIndexBySetIndex: function(setIndex) {
+    for (var i = 0; i < this.tanksSetIndices.length; i++) {
+      if (this.tanksSetIndices[i] === setIndex) {
+        return i;
+      }
+    }
+    return -1;
+  },
+  
+  // Schedule a tank to respawn after delay
+  scheduleTankRespawn: function(tankIndex) {
+    if (tankIndex < 0 || tankIndex >= this.tanksSetIndices.length) return;
+    
+    // Mark tank as dead
+    this.tankDeadFlags[tankIndex] = true;
+    this.tankRespawnTimers[tankIndex] = this.tankRespawnDelay;
+    
+    // Deactivate tank game object
+    var setIdx = this.tanksSetIndices[tankIndex];
+    var tankObj = this.getGameObjectBySetIndex(setIdx);
+    if (tankObj) {
+      tankObj.active = false;
+      tankObj.collidable = false;
+    }
+    
+  },
+  
+  // Update tank respawn timers (called each frame)
+  updateTankRespawns: function(deltaTime) {
+    for (var i = 0; i < this.tankDeadFlags.length; i++) {
+      if (this.tankDeadFlags[i]) {
+        this.tankRespawnTimers[i] -= deltaTime;
+        if (this.tankRespawnTimers[i] <= 0) {
+          this.respawnTank(i);
+        }
+      }
+    }
+  },
+  
+  // Respawn a single tank
+  respawnTank: function(tankIndex) {
+    if (tankIndex < 0 || tankIndex >= this.tanksSetIndices.length) return;
+    
+    var setIdx = this.tanksSetIndices[tankIndex];
+    
+    // Reset dead flag
+    this.tankDeadFlags[tankIndex] = false;
+    this.tankRespawnTimers[tankIndex] = 0;
+    
+    // Reset tank position to initial position
+    this.tankPositions[tankIndex][0] = this.tankInitialPositions[tankIndex][0];
+    this.tankPositions[tankIndex][1] = this.tankInitialPositions[tankIndex][1];
+    this.tankPositions[tankIndex][2] = this.tankInitialPositions[tankIndex][2];
+    
+    // Reset rotation
+    this.tankRotationAngles[tankIndex] = 0;
+    this.tankTargetRotationAngles[tankIndex] = 0;
+    this.tankRotatedToPlayer[tankIndex] = false;
+    this.tankHasFiredThisRotation[tankIndex] = false;
+    this.tankMovementTimers[tankIndex] = 0;
+    
+    // Reset forward direction to initial
+    this.tankForwardDirections[tankIndex][0] = this.tankInitialForwardDirections[tankIndex][0];
+    this.tankForwardDirections[tankIndex][1] = this.tankInitialForwardDirections[tankIndex][1];
+    this.tankForwardDirections[tankIndex][2] = this.tankInitialForwardDirections[tankIndex][2];
+    
+    // Reactivate tank game object
+    var tankObj = this.getGameObjectBySetIndex(setIdx);
+    if (tankObj) {
+      tankObj.active = true;
+      tankObj.collidable = true;
+      tankObj.position[0] = this.tankInitialPositions[tankIndex][0];
+      tankObj.position[1] = this.tankInitialPositions[tankIndex][1];
+      tankObj.position[2] = this.tankInitialPositions[tankIndex][2];
+      tankObj.updateWorldBoundingBox();
+    }
+    
+    // Reset model matrix
+    this.modelMat[setIdx] = mat4.create();
+    this.translate(
+      -this.TriangleSetInfo[setIdx].avgPos[0],
+      -this.TriangleSetInfo[setIdx].avgPos[1],
+      -this.TriangleSetInfo[setIdx].avgPos[2],
+      setIdx
+    );
+    this.translate(
+      this.tankPositions[tankIndex][0],
+      this.tankPositions[tankIndex][1],
+      this.tankPositions[tankIndex][2],
+      setIdx
+    );
+  },
+  
+  // Reset all tanks (called on game reset)
+  resetAllTanks: function() {
+    for (var i = 0; i < this.tanksSetIndices.length; i++) {
+      // Force respawn even if not dead
+      this.tankDeadFlags[i] = false;
+      this.tankRespawnTimers[i] = 0;
+      this.respawnTank(i);
+    }
+    
+    // Reset enemy bullets associated with tanks
+    for (var i = 0; i < this.enemyBullets.length; i++) {
+      if (this.enemyBullets[i] && this.enemyBullets[i].completeReset) {
+        this.enemyBullets[i].completeReset();
+      }
+    }
+  },
+  
+  // Check if a specific tank is dead
+  isTankDead: function(tankIndex) {
+    if (tankIndex < 0 || tankIndex >= this.tankDeadFlags.length) return true;
+    return this.tankDeadFlags[tankIndex];
   }
 };
 

@@ -19,6 +19,9 @@
     <script type="text/javascript" src="src/modules/GameObjects.js"></script>
     <script type="text/javascript" src="src/modules/Collision.js"></script>
     
+    <!-- Game state management -->
+    <script type="text/javascript" src="src/modules/GameState.js"></script>
+    
     <!-- Core modules -->
     <script type="text/javascript" src="src/modules/Models.js"></script>
     <script type="text/javascript" src="src/modules/Renderer.js"></script>
@@ -29,6 +32,20 @@
 
   <body onload="main();">
     <canvas id="myImageCanvas" width="1400" height="1024"></canvas>
-    <canvas id="myWebGLCanvas" width="1400" height="1024"></canvas> 
+    <canvas id="myWebGLCanvas" width="1400" height="1024"></canvas>
+    
+    <!-- Game HUD -->
+    <div id="gameHUD">
+      <div id="scoreDisplay">Score: 0</div>
+    </div>
+    
+    <!-- Death overlay -->
+    <div id="deathOverlay">
+      <div class="death-message">
+        <div class="death-title">== TANK DESTROYED ==</div>
+        <h1>VECTOR SYSTEMS OFFLINE</h1>
+        <p>Recalibrating tracking grid... stand by for respawn</p>
+      </div>
+    </div>
   </body>
 </html>

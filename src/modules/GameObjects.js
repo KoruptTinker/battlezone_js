@@ -106,7 +106,6 @@ class Bullet extends GameObject {
     this.position[2] = eye[2] + forward[2] * offsetDist;
     
     this.updateModelMatrix();
-    console.log("Bullet fired!");
   }
 
   // Helper to start the reset timer
@@ -138,9 +137,17 @@ class Bullet extends GameObject {
 
   onCollision(other, info) {
     if (this.fired && !this.isResetting) {
-      console.log("Bullet hit " + other.type);
-      // Reset on hitting any collidable object (including mountains)
-      if (other.type === 'house' || other.type === 'tank' || other.type === 'mountain') {
+      // Check if we hit an enemy tank (type can be 'tank' or 'enemy_tank' depending on scene.json)
+      if (other.type === 'tank' || other.type === 'enemy_tank') {
+        // Find the tank index and destroy it
+        var tankIndex = Models.getTankIndexBySetIndex(other.setIndex);
+        if (tankIndex >= 0 && GameState.isPlaying()) {
+          GameState.onTankDestroyed(tankIndex);
+        }
+        this.reset();
+      }
+      // Reset on hitting any other collidable object (houses/buildings)
+      else if (other.type === 'house') {
          this.reset();
       }
     }
@@ -254,7 +261,6 @@ class EnemyBullet extends GameObject {
     this.position[2] = tankPosition[2] + this.direction[2] * offsetDist;
     
     this.updateModelMatrix();
-    console.log("Enemy bullet fired from tank " + this.ownerTankIndex + "!");
     return true;
   }
 
@@ -284,12 +290,46 @@ class EnemyBullet extends GameObject {
 
   onCollision(other, info) {
     if (this.fired && !this.isResetting) {
-      console.log("Enemy bullet hit " + other.type);
       // Reset on hitting objects (but not other enemy bullets or the owning tank)
-      if (other.type === 'house' || other.type === 'mountain' || other.type === 'player_bullet') {
+      if (other.type === 'house' || other.type === 'player_bullet') {
         this.reset();
       }
     }
+  }
+  
+  // Check if this bullet hits the player (called separately from object collision)
+  checkPlayerHit() {
+    if (!this.fired || this.isResetting) return false;
+    
+    // Player collision box around Camera.Eye
+    var playerRadius = 0.15;
+    var playerBox = {
+      min: [
+        Camera.Eye[0] - playerRadius,
+        Camera.Eye[1] - 0.2,
+        Camera.Eye[2] - playerRadius
+      ],
+      max: [
+        Camera.Eye[0] + playerRadius,
+        Camera.Eye[1] + 0.2,
+        Camera.Eye[2] + playerRadius
+      ]
+    };
+    
+    // Check if bullet bounding box overlaps with player
+    var bulletBox = this.boundingBox;
+    var hit = (
+      bulletBox.min[0] <= playerBox.max[0] && bulletBox.max[0] >= playerBox.min[0] &&
+      bulletBox.min[1] <= playerBox.max[1] && bulletBox.max[1] >= playerBox.min[1] &&
+      bulletBox.min[2] <= playerBox.max[2] && bulletBox.max[2] >= playerBox.min[2]
+    );
+    
+    if (hit) {
+      this.reset();
+      return true;
+    }
+    
+    return false;
   }
 }
 

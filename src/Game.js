@@ -1,6 +1,9 @@
 // Main game initialization and coordination
 
 function main() {
+  // Initialize game state
+  GameState.init();
+  
   // Initialize camera angles
   Camera.updateAngles();
   
@@ -20,9 +23,6 @@ function main() {
   
   // Setup shaders
   Shaders.setupShaders(Renderer.gl);
-  
-  // Log triangle set info
-  console.log(Models.TriangleSetInfo);
   
   // Start rendering loop
   Renderer.renderTriangles();

@@ -53,8 +53,10 @@ class GameObject {
     // Active state
     this.active = true;
     
-    // Collision callbacks
-    this.onCollision = options.onCollision || null;
+    // Collision callbacks (only set if explicitly provided, so subclass methods aren't shadowed)
+    if (options.onCollision) {
+      this.onCollision = options.onCollision;
+    }
   }
   
   // Generate unique ID

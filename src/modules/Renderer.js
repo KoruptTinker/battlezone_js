@@ -73,12 +73,28 @@ const Renderer = {
       Models.updateGameObjects(deltaTime);
     }
     
+    // Update game state
+    if (deltaTime > 0 && typeof GameState !== 'undefined') {
+      GameState.update(deltaTime);
+    }
+    
     // Check collisions between all game objects
     var collisions = Collision.update();
     
     // Optionally resolve collisions (push objects apart)
     for (var i = 0; i < collisions.length; i++) {
       Collision.resolveCollision(collisions[i]);
+    }
+    
+    // Check enemy bullets hitting player (separate from object collision)
+    if (typeof GameState !== 'undefined' && GameState.isPlaying()) {
+      for (var i = 0; i < Models.enemyBullets.length; i++) {
+        var bullet = Models.enemyBullets[i];
+        if (bullet && bullet.checkPlayerHit && bullet.checkPlayerHit()) {
+          GameState.onPlayerDeath();
+          break; // Only need to detect one hit
+        }
+      }
     }
     
     // Debug: log collisions
