@@ -30,6 +30,8 @@ const Models = {
   tankMovementTimers: [], // Track movement time for each tank
   tankRotatedToPlayer: [], // Track if tank has rotated towards player
   tankRotationAngles: [], // Store current rotation angle for each tank
+  tankTargetRotationAngles: [], // Store target rotation angle for gradual rotation
+  tankRotationSpeed: 0.3, // Rotation speed in radians per second (same as player)
   initialCameraEye: null,
   initialCameraTarget: null,
   
@@ -52,6 +54,7 @@ const Models = {
     this.tankMovementTimers = [];
     this.tankRotatedToPlayer = [];
     this.tankRotationAngles = [];
+    this.tankTargetRotationAngles = [];
     this.gameObjects = [];
 
     // Support loading multiple JSON triangle sets so we can show mountains + tank together
@@ -146,6 +149,7 @@ const Models = {
           // Initialize rotation tracking
           this.tankRotatedToPlayer.push(false);
           this.tankRotationAngles.push(0);
+          this.tankTargetRotationAngles.push(0);
         }
         
         // Create Game Objects based on type or texture
@@ -446,7 +450,7 @@ const Models = {
       // Update movement timer
       this.tankMovementTimers[i] += deltaTime;
       
-      // Check if it's time to rotate towards player (every 5 seconds)
+      // Check if it's time to set a new rotation target (every 5 seconds)
       if (this.tankMovementTimers[i] >= rotationThreshold) {
         // Calculate direction to player (Camera.Eye)
         var toPlayer = [
@@ -470,35 +474,66 @@ const Models = {
         // Target angle (direction to player)
         var targetAngle = Math.atan2(toPlayer[0], toPlayer[2]);
         
-        // Rotation needed: from initial model orientation to target direction
-        // This is the absolute rotation to apply to the model
-        var rotationAngle = targetAngle - initialAngle;
+        // Target rotation needed: from initial model orientation to target direction
+        var targetRotationAngle = targetAngle - initialAngle;
         
         // Normalize angle to [-PI, PI]
-        while (rotationAngle > Math.PI) rotationAngle -= 2 * Math.PI;
-        while (rotationAngle < -Math.PI) rotationAngle += 2 * Math.PI;
+        while (targetRotationAngle > Math.PI) targetRotationAngle -= 2 * Math.PI;
+        while (targetRotationAngle < -Math.PI) targetRotationAngle += 2 * Math.PI;
         
-        // Store the rotation angle
-        this.tankRotationAngles[i] = rotationAngle;
+        // Store the TARGET rotation angle (will gradually interpolate towards this)
+        this.tankTargetRotationAngles[i] = targetRotationAngle;
         
         // Log the angles
-        console.log("=== Tank " + i + " Rotation (Every 5 Seconds) ===");
+        console.log("=== Tank " + i + " New Target (Every 5 Seconds) ===");
         console.log("Tank Position: [" + this.tankPositions[i][0].toFixed(4) + ", " + this.tankPositions[i][1].toFixed(4) + ", " + this.tankPositions[i][2].toFixed(4) + "]");
         console.log("Player Position: [" + Camera.Eye[0].toFixed(4) + ", " + Camera.Eye[1].toFixed(4) + ", " + Camera.Eye[2].toFixed(4) + "]");
-        console.log("Initial Forward Direction: [" + this.tankInitialForwardDirections[i][0].toFixed(4) + ", " + this.tankInitialForwardDirections[i][2].toFixed(4) + "]");
-        console.log("Initial Forward Angle: " + (initialAngle * 180 / Math.PI).toFixed(2) + " degrees");
-        console.log("Current Forward Angle: " + (currentAngle * 180 / Math.PI).toFixed(2) + " degrees");
-        console.log("Target Angle (to player): " + (targetAngle * 180 / Math.PI).toFixed(2) + " degrees");
-        console.log("Model Rotation Angle: " + (rotationAngle * 180 / Math.PI).toFixed(2) + " degrees");
-        
-        // Update forward direction to face player
-        this.tankForwardDirections[i] = [toPlayer[0], 0, toPlayer[2]];
+        console.log("Current Rotation Angle: " + (this.tankRotationAngles[i] * 180 / Math.PI).toFixed(2) + " degrees");
+        console.log("Target Rotation Angle: " + (targetRotationAngle * 180 / Math.PI).toFixed(2) + " degrees");
         
         // Mark as has rotated at least once (for model matrix logic)
         this.tankRotatedToPlayer[i] = true;
         
         // Reset timer for next rotation
         this.tankMovementTimers[i] = 0;
+      }
+      
+      // Gradually rotate towards target (every frame)
+      if (this.tankRotatedToPlayer[i]) {
+        var currentRotation = this.tankRotationAngles[i];
+        var targetRotation = this.tankTargetRotationAngles[i];
+        
+        // Calculate angle difference
+        var angleDiff = targetRotation - currentRotation;
+        
+        // Normalize to [-PI, PI] for shortest path
+        while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+        while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+        
+        // Calculate rotation step for this frame
+        var maxRotationStep = this.tankRotationSpeed * deltaTime;
+        
+        // Apply rotation (clamped to not overshoot)
+        if (Math.abs(angleDiff) <= maxRotationStep) {
+          // Close enough, snap to target
+          this.tankRotationAngles[i] = targetRotation;
+        } else if (angleDiff > 0) {
+          // Rotate counterclockwise (positive)
+          this.tankRotationAngles[i] += maxRotationStep;
+        } else {
+          // Rotate clockwise (negative)
+          this.tankRotationAngles[i] -= maxRotationStep;
+        }
+        
+        // Normalize current rotation to [-PI, PI]
+        while (this.tankRotationAngles[i] > Math.PI) this.tankRotationAngles[i] -= 2 * Math.PI;
+        while (this.tankRotationAngles[i] < -Math.PI) this.tankRotationAngles[i] += 2 * Math.PI;
+        
+        // Update forward direction based on current rotation angle
+        // Forward = initial forward rotated by current rotation angle
+        var initialAngle = Math.atan2(this.tankInitialForwardDirections[i][0], this.tankInitialForwardDirections[i][2]);
+        var newAngle = initialAngle + this.tankRotationAngles[i];
+        this.tankForwardDirections[i] = [Math.sin(newAngle), 0, Math.cos(newAngle)];
       }
       
       // Update position (only in XZ plane, keep Y constant)
