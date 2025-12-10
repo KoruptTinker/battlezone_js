@@ -7,9 +7,24 @@ const Renderer = {
   // Collision debug mode
   debugCollisions: false,
   
+  // Update background color based on current scene
+  updateBackgroundColor: function() {
+    var imageCanvas = document.getElementById("myImageCanvas");
+    if (imageCanvas) {
+      var cw = imageCanvas.width, ch = imageCanvas.height;
+      var imageContext = imageCanvas.getContext("2d");
+      if (Models.currentScene === "scene2") {
+        imageContext.fillStyle = "#000026"; // Dark blue for scene_2
+      } else {
+        imageContext.fillStyle = "black"; // Black for scene_1
+      }
+      imageContext.fillRect(0, 0, cw, ch);
+    }
+  },
+  
   // Set up WebGL environment
   setupWebGL: function() {
-    // Set up solid background canvas (black)
+    // Set up solid background canvas (black by default)
     var imageCanvas = document.getElementById("myImageCanvas");
     var cw = imageCanvas.width, ch = imageCanvas.height;
     var imageContext = imageCanvas.getContext("2d");
@@ -58,7 +73,12 @@ const Renderer = {
       Input.update(deltaTime);
     }
     
-    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    // Set background color based on current scene
+    if (Models.currentScene === "scene2") {
+      gl.clearColor(0.0, 0.0, 0.15, 1.0); // Dark blue for scene_2
+    } else {
+      gl.clearColor(0.0, 0.0, 0.0, 1.0); // Black for scene_1
+    }
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     requestAnimationFrame(() => this.renderTriangles());
     

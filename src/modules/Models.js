@@ -42,7 +42,7 @@ const Models = {
   tankRotatedToPlayer: [], // Track if tank has rotated towards player
   tankRotationAngles: [], // Store current rotation angle for each tank
   tankTargetRotationAngles: [], // Store target rotation angle for gradual rotation
-  tankRotationSpeed: 0.3, // Rotation speed in radians per second (same as player)
+  tankRotationSpeed: 0.5, // Rotation speed in radians per second (same as player)
   tankHasFiredThisRotation: [], // Track if tank has fired during current rotation cycle
   initialCameraEye: null,
   initialCameraTarget: null,
@@ -1144,6 +1144,11 @@ const Models = {
     
     // Store initial camera position
     this.initialCameraEye = vec4.fromValues(Camera.Eye[0], Camera.Eye[1], Camera.Eye[2]);
+    
+    // Update background color for the new scene
+    if (typeof Renderer !== 'undefined' && Renderer.updateBackgroundColor) {
+      Renderer.updateBackgroundColor();
+    }
     
     // Load the new scene
     this.loadTriangles(gl).then(function(success) {
