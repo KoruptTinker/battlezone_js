@@ -2,7 +2,7 @@
 class Bullet extends GameObject {
   constructor(options = {}) {
     super(options);
-    this.speed = options.speed || 1.0; // Units per second
+    this.speed = options.speed || 1.5; // Units per second (50% faster)
     this.fired = false;
     this.direction = [0, 0, 1];
     
@@ -19,7 +19,7 @@ class Bullet extends GameObject {
     // Reset delay logic
     this.isResetting = false;
     this.resetTimer = 0;
-    this.resetDuration = 1.0; // 1 second delay before full reset
+    this.resetDuration = 2.0; // 2 second delay before full reset
     
     // Flight time logic
     this.timeSinceFired = 0;

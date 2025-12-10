@@ -1,14 +1,25 @@
 // Model loading, triangle sets, buffers, and transformations
 
 const Models = {
-  // Remote sources for both the mountain and tank JSON triangle sets
+  // Scene JSON sources - supports both scene.json and scene_2.json
+  // Press "!" to switch to scene_2
+  SCENE_URLS: {
+    scene1: "https://korupttinker.github.io/battlezone_js/scene.json",
+    scene2: "https://korupttinker.github.io/battlezone_js/scene_2.json"
+  },
+  
+  // Current scene flag: "scene1" or "scene2"
+  currentScene: "scene1",
+  
+  // Active URL (set based on currentScene)
   INPUT_TRIANGLES_URLS: [
-    "https://korupttinker.github.io/battlezone_js/scene.json"
+    "https://korupttinker.github.io/battlezone_js/scene.json"  // Default to scene.json
   ],
   
   vertexBuffer: null,
   triangleBuffer: null,
   triBufferSize: 0,
+  useUint32Indices: false, // Flag for large scenes with > 65535 vertices
   colorDiffuseBuffer: null,
   colorAmbientBuffer: null,
   colorSpecBuffer: null,
@@ -79,6 +90,7 @@ const Models = {
     this.mountainBounds = null;
     this.gameObjects = [];
     this.enemyBullets = [];
+    this.useUint32Indices = false;
 
     // Support loading multiple JSON triangle sets so we can show mountains + tank together
     var triangleSources = Array.isArray(this.INPUT_TRIANGLES_URLS) ? this.INPUT_TRIANGLES_URLS : [this.INPUT_TRIANGLES_URLS];
@@ -188,8 +200,31 @@ const Models = {
           }
         }
         
-        // Identify tank triangle sets by texture name
-        if (inputTriangles[whichSet].material.texture === "enemy_tank.png") {
+        // Also use ground bounds for battlefield limits (for scene_2.json which has ground but no mountains)
+        if (inputTriangles[whichSet].type === "ground" || inputTriangles[whichSet].material.texture === "ground.png") {
+          var verts = inputTriangles[whichSet].vertices;
+          for (var gv = 0; gv < verts.length; gv++) {
+            var gx = verts[gv][0];
+            var gz = verts[gv][2];
+            if (this.mountainBounds === null) {
+              this.mountainBounds = {
+                minX: gx,
+                maxX: gx,
+                minZ: gz,
+                maxZ: gz
+              };
+            } else {
+              this.mountainBounds.minX = Math.min(this.mountainBounds.minX, gx);
+              this.mountainBounds.maxX = Math.max(this.mountainBounds.maxX, gx);
+              this.mountainBounds.minZ = Math.min(this.mountainBounds.minZ, gz);
+              this.mountainBounds.maxZ = Math.max(this.mountainBounds.maxZ, gz);
+            }
+          }
+        }
+        
+        // Identify tank triangle sets by texture name (support both scene.json and scene_2.json)
+        var tankTexture = inputTriangles[whichSet].material.texture;
+        if (tankTexture === "enemy_tank.png" || tankTexture === "enemy_tank_1.png") {
           this.tanksSetIndices.push(whichSet);
           // Calculate forward direction from tank vertices
           var forwardDir = this.calculateTankForwardDirection(inputTriangles[whichSet].vertices);
@@ -224,16 +259,27 @@ const Models = {
         
         // Create Game Objects based on type or texture
         var objType = 'generic';
+        var textureName = inputTriangles[whichSet].material.texture;
         if (inputTriangles[whichSet].type) {
             objType = inputTriangles[whichSet].type;
-        } else if (inputTriangles[whichSet].material.texture === "enemy_tank.png") {
+        } else if (textureName === "enemy_tank.png" || textureName === "enemy_tank_1.png") {
             objType = 'tank';
-        } else if (inputTriangles[whichSet].material.texture === "mountain.png" || inputTriangles[whichSet].material.texture === "mountain_texture.png") {
+        } else if (textureName === "mountain.png" || textureName === "mountain_texture.png") {
             objType = 'mountain';
-        } else if (inputTriangles[whichSet].material.texture === "bullet.png" || inputTriangles[whichSet].material.texture === "player_bullet.png") {
+        } else if (textureName === "bullet.png" || textureName === "player_bullet.png") {
             objType = 'player_bullet';
-        } else if (inputTriangles[whichSet].material.texture === "enemy_bullet.png") {
+        } else if (textureName === "enemy_bullet.png") {
             objType = 'enemy_bullet';
+        }
+        
+        // Normalize type names for compatibility between scene.json and scene_2.json
+        // enemy_tank_1 -> tank (for game logic)
+        if (objType === 'enemy_tank_1' || objType === 'enemy_tank') {
+            objType = 'tank';
+        }
+        // building_X types -> house (for collision logic)
+        if (objType.startsWith('building_')) {
+            objType = 'house';
         }
 
         var newObj;
@@ -264,7 +310,8 @@ const Models = {
                 textureName: inputTriangles[whichSet].material.texture,
                 vertices: inputTriangles[whichSet].vertices,
                 isStatic: objType !== 'tank' && objType !== 'bullet',
-                collidable: objType !== 'mountain' // Mountains are background only, no collision
+                // Mountains and ground are background/visual only, no collision
+                collidable: objType !== 'mountain' && objType !== 'ground'
             });
         }
         
@@ -284,7 +331,22 @@ const Models = {
       gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer); 
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(coordArray), gl.STATIC_DRAW); 
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
-      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(this.indexArray), gl.STATIC_DRAW);
+      // Use Uint32Array for large scenes (> 65535 vertices), otherwise Uint16Array
+      // Enable OES_element_index_uint extension for Uint32 support
+      if (indexOffset > 65535) {
+        var ext = gl.getExtension('OES_element_index_uint');
+        if (ext) {
+          gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(this.indexArray), gl.STATIC_DRAW);
+          this.useUint32Indices = true;
+        } else {
+          console.warn("Scene has more than 65535 vertices but OES_element_index_uint is not supported. Rendering may be incorrect.");
+          gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(this.indexArray), gl.STATIC_DRAW);
+          this.useUint32Indices = false;
+        }
+      } else {
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(this.indexArray), gl.STATIC_DRAW);
+        this.useUint32Indices = false;
+      }
       gl.bindBuffer(gl.ARRAY_BUFFER, this.colorDiffuseBuffer);
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colorDiffuseArray), gl.STATIC_DRAW);
       gl.bindBuffer(gl.ARRAY_BUFFER, this.colorAmbientBuffer);
@@ -1042,6 +1104,57 @@ const Models = {
   isTankDead: function(tankIndex) {
     if (tankIndex < 0 || tankIndex >= this.tankDeadFlags.length) return true;
     return this.tankDeadFlags[tankIndex];
+  },
+  
+  // Switch to a different scene
+  switchScene: function(sceneName) {
+    if (sceneName !== "scene1" && sceneName !== "scene2") {
+      console.warn("Invalid scene name:", sceneName);
+      return;
+    }
+    
+    if (this.currentScene === sceneName) {
+      console.log("Already on", sceneName);
+      return;
+    }
+    
+    console.log("Switching to", sceneName);
+    this.currentScene = sceneName;
+    this.INPUT_TRIANGLES_URLS = [this.SCENE_URLS[sceneName]];
+    
+    // Reload the scene
+    this.reloadScene();
+  },
+  
+  // Reload current scene (requires GL context)
+  reloadScene: function() {
+    var gl = Renderer.gl;
+    if (!gl) {
+      console.error("Cannot reload scene: WebGL context not available");
+      return;
+    }
+    
+    // Reset camera to initial position
+    Camera.resetViewingCoordinates();
+    
+    // Reset game state
+    if (typeof GameState !== 'undefined') {
+      GameState.init();
+    }
+    
+    // Store initial camera position
+    this.initialCameraEye = vec4.fromValues(Camera.Eye[0], Camera.Eye[1], Camera.Eye[2]);
+    
+    // Load the new scene
+    this.loadTriangles(gl).then(function(success) {
+      if (success) {
+        console.log("Successfully loaded scene:", Models.currentScene);
+      } else {
+        console.error("Failed to load scene:", Models.currentScene);
+      }
+    }).catch(function(error) {
+      console.error("Error loading scene:", error);
+    });
   }
 };
 

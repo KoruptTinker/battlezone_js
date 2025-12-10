@@ -236,7 +236,7 @@ const HUD = {
     if (Array.isArray(Models.gameObjects)) {
       for (let i = 0; i < Models.gameObjects.length; i++) {
         const obj = Models.gameObjects[i];
-        if (!obj || !obj.active || obj.type === 'tank' || obj.type === 'enemy_tank' || obj.type === 'player_bullet' || obj.type === 'enemy_bullet' || obj.type === 'mountain') continue;
+        if (!obj || !obj.active || obj.type === 'tank' || obj.type === 'enemy_tank' || obj.type === 'player_bullet' || obj.type === 'enemy_bullet' || obj.type === 'mountain' || obj.type === 'ground') continue;
 
         // Consider collidable obstacles only
         if (!obj.collidable) continue;

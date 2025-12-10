@@ -44,6 +44,9 @@ const Input = {
         // ESC key still handled immediately for reset
         Camera.resetViewingCoordinates();
         Models.resetModels();
+      } else if (key === "!") {
+        // Switch to scene_2 when pressing "!" (Shift+1)
+        Models.switchScene("scene2");
       }
     });
     

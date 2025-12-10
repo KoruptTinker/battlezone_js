@@ -151,7 +151,10 @@ const Renderer = {
       if (Models.textureArray[itr]) {
         gl.bindTexture(gl.TEXTURE_2D, Models.textureArray[itr]);
       }
-      gl.drawElements(gl.TRIANGLES, Models.TriangleSetInfo[itr].endIdx - Models.TriangleSetInfo[itr].startIdx, gl.UNSIGNED_SHORT, Models.TriangleSetInfo[itr].startIdx * 2);
+      // Use appropriate index type based on scene size
+      var indexType = Models.useUint32Indices ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
+      var bytesPerIndex = Models.useUint32Indices ? 4 : 2;
+      gl.drawElements(gl.TRIANGLES, Models.TriangleSetInfo[itr].endIdx - Models.TriangleSetInfo[itr].startIdx, indexType, Models.TriangleSetInfo[itr].startIdx * bytesPerIndex);
     }
 
     // Draw 2D HUD overlay
