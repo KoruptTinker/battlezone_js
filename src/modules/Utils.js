@@ -4,31 +4,42 @@ const Utils = {
   // Remote asset base URL (textures are hosted alongside the JSON files)
   INPUT_TEXTURES_URL: "https://korupttinker.github.io/battlezone_js/",
   
-  // Get the JSON file from the passed URL
+  // Get the JSON file from the passed URL (async using fetch)
   getJSONFile: function(url, descr) {
-    try {
-      if ((typeof (url) !== "string") || (typeof (descr) !== "string"))
-        throw "getJSONFile: parameter not a string";
-      else {
-        var httpReq = new XMLHttpRequest(); // a new http request
-        httpReq.open("GET", url, false); // init the request
-        httpReq.send(null); // send the request
-        var startTime = Date.now();
-        while ((httpReq.status !== 200) && (httpReq.readyState !== XMLHttpRequest.DONE)) {
-          if ((Date.now() - startTime) > 3000)
-            break;
-        } // until its loaded or we time out after three seconds
-        if ((httpReq.status !== 200) || (httpReq.readyState !== XMLHttpRequest.DONE))
-          throw "Unable to open " + descr + " file!";
-        else
-          return JSON.parse(httpReq.response);
-      } // end if good params
-    } // end try    
-
-    catch (e) {
-      console.log(e);
-      return (String.null);
-    }
+    console.log("getJSONFile called with url:", url, "descr:", descr);
+    return new Promise(function(resolve, reject) {
+      try {
+        if ((typeof (url) !== "string") || (typeof (descr) !== "string")) {
+          console.error("getJSONFile: Invalid parameters");
+          reject(new Error("getJSONFile: parameter not a string"));
+          return;
+        }
+        
+        console.log("About to call fetch() for " + descr + " from: " + url);
+        var fetchPromise = fetch(url);
+        console.log("fetch() called, promise created");
+        
+        fetchPromise
+          .then(function(response) {
+            console.log("Fetch response received for " + descr + ", status:", response.status);
+            if (!response.ok) {
+              throw new Error("HTTP error! status: " + response.status);
+            }
+            return response.json();
+          })
+          .then(function(data) {
+            console.log("Successfully loaded and parsed " + descr);
+            resolve(data);
+          })
+          .catch(function(error) {
+            console.error("Failed to load " + descr + " from " + url + ":", error);
+            reject(error);
+          });
+      } catch (e) {
+        console.error("Error in getJSONFile:", e);
+        reject(e);
+      }
+    });
   },
 
   // Load a texture image and return a Promise

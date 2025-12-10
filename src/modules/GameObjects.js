@@ -242,6 +242,11 @@ class EnemyBullet extends GameObject {
     this.isResetting = false;
     this.timeSinceFired = 0;
     
+    // Play fire sound
+    if (typeof SoundManager !== 'undefined') {
+      SoundManager.playExplosion();
+    }
+    
     // Set direction towards player (Camera.Eye)
     const toPlayer = [
       Camera.Eye[0] - tankPosition[0],
@@ -299,7 +304,13 @@ class EnemyBullet extends GameObject {
   onCollision(other, info) {
     if (this.fired && !this.isResetting) {
       // Reset on hitting objects (but not other enemy bullets or the owning tank)
-      if (other.type === 'house' || other.type === 'player_bullet') {
+      if (other.type === 'house') {
+        // Play explosion miss sound when hitting house
+        if (typeof SoundManager !== 'undefined') {
+          SoundManager.playExplosionMiss();
+        }
+        this.reset();
+      } else if (other.type === 'player_bullet') {
         this.reset();
       }
     }
@@ -333,6 +344,10 @@ class EnemyBullet extends GameObject {
     );
     
     if (hit) {
+      // Play explosion sound when hitting player
+      if (typeof SoundManager !== 'undefined') {
+        SoundManager.playExplosion();
+      }
       this.reset();
       return true;
     }

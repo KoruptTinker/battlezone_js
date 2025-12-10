@@ -53,8 +53,10 @@ const Models = {
   // Mountain boundary for constraining spawns
   mountainBounds: null,
   
-  // Load triangles from JSON file
+  // Load triangles from JSON file (async)
   loadTriangles: function(gl) {
+    var self = this;
+    
     // Reset any stale buffers/state in case we reload
     this.indexArray = [];
     this.textureArray = [];
@@ -80,14 +82,35 @@ const Models = {
 
     // Support loading multiple JSON triangle sets so we can show mountains + tank together
     var triangleSources = Array.isArray(this.INPUT_TRIANGLES_URLS) ? this.INPUT_TRIANGLES_URLS : [this.INPUT_TRIANGLES_URLS];
-    var inputTriangles = [];
-    triangleSources.forEach(function(url) {
-      var data = Utils.getJSONFile(url, "triangles");
-      if (data != String.null) {
-        // Each file returns an array of triangle sets; append them
-        inputTriangles = inputTriangles.concat(data);
-      }
+    console.log("Triangle sources to load:", triangleSources);
+    
+    // Load all JSON files in parallel
+    var loadPromises = triangleSources.map(function(url) {
+      console.log("Creating promise for URL:", url);
+      return Utils.getJSONFile(url, "triangles");
     });
+    console.log("Created", loadPromises.length, "load promises");
+    
+    return Promise.all(loadPromises)
+      .then(function(results) {
+        var inputTriangles = [];
+        results.forEach(function(data) {
+          if (data != null) {
+            // Each file returns an array of triangle sets; append them
+            inputTriangles = inputTriangles.concat(data);
+          }
+        });
+        
+        return self.processTriangles(gl, inputTriangles);
+      })
+      .catch(function(error) {
+        console.error("Error loading triangles:", error);
+        return null;
+      });
+  },
+  
+  // Process loaded triangle data
+  processTriangles: function(gl, inputTriangles) {
 
     if (inputTriangles.length > 0) {
       var whichSetVert;
@@ -281,20 +304,25 @@ const Models = {
       for(var textureId = 0; textureId < textureNameArray.length; textureId++) {
         texturePromises.push(Utils.getTextureImage(gl, textureNameArray[textureId]));
       }
-      Promise.all(texturePromises).then(function(loadedTextures) {
+      return Promise.all(texturePromises).then(function(loadedTextures) {
         for(var i = 0; i < loadedTextures.length; i++) {
           Models.textureArray.push(loadedTextures[i]);
         }
+        
+        // Initialize tank positions from scene (extract from model matrices)
+        Models.initializeTankPositionsFromScene();
+        
+        // Assign enemy bullets to tanks (one bullet per tank)
+        Models.assignEnemyBulletsToTanks();
+        
+        return true;
       }).catch(function(error) {
         console.error("Error loading textures:", error);
+        return false;
       });
-      
-      // Initialize tank positions from scene (extract from model matrices)
-      this.initializeTankPositionsFromScene();
-      
-      // Assign enemy bullets to tanks (one bullet per tank)
-      this.assignEnemyBulletsToTanks();
-    } 
+    } else {
+      return Promise.resolve(false);
+    }
   },
   
   // Assign enemy bullets to tanks (one per tank)
