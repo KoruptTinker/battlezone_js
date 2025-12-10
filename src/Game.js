@@ -4,6 +4,9 @@ function main() {
   // Initialize game state
   GameState.init();
   
+  // Initialize audio system
+  SoundManager.init();
+  
   // Initialize camera angles
   Camera.updateAngles();
   

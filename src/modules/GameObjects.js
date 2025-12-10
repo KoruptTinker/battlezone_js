@@ -139,6 +139,10 @@ class Bullet extends GameObject {
     if (this.fired && !this.isResetting) {
       // Check if we hit an enemy tank (type can be 'tank' or 'enemy_tank' depending on scene.json)
       if (other.type === 'tank' || other.type === 'enemy_tank') {
+        // Play explosion sound
+        if (typeof SoundManager !== 'undefined') {
+          SoundManager.playExplosion();
+        }
         // Find the tank index and destroy it
         var tankIndex = Models.getTankIndexBySetIndex(other.setIndex);
         if (tankIndex >= 0 && GameState.isPlaying()) {
@@ -148,7 +152,11 @@ class Bullet extends GameObject {
       }
       // Reset on hitting any other collidable object (houses/buildings)
       else if (other.type === 'house') {
-         this.reset();
+        // Play explosion miss sound
+        if (typeof SoundManager !== 'undefined') {
+          SoundManager.playExplosionMiss();
+        }
+        this.reset();
       }
     }
   }

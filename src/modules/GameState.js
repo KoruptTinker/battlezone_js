@@ -22,11 +22,16 @@ const GameState = {
   score: 0,
   tanksDestroyed: 0,
   
+  // Radar sound timer
+  radarTimer: 0,
+  radarInterval: 3.0, // Play radar sound every 3 seconds
+  
   // Initialize the game state
   init: function() {
     this.currentState = this.STATES.PLAYING;
     this.resetTimer = 0;
     this.playerDead = false;
+    this.radarTimer = 0;
   },
   
   // Update game state (called each frame)
@@ -35,6 +40,17 @@ const GameState = {
       this.resetTimer -= deltaTime;
       if (this.resetTimer <= 0) {
         this.resetGame();
+      }
+    }
+    
+    // Handle radar sound (only when playing)
+    if (this.currentState === this.STATES.PLAYING) {
+      this.radarTimer += deltaTime;
+      if (this.radarTimer >= this.radarInterval) {
+        this.radarTimer = 0;
+        if (typeof SoundManager !== 'undefined') {
+          SoundManager.playRadar();
+        }
       }
     }
   },
