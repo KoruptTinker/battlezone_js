@@ -341,153 +341,81 @@ const Models = {
       return [0, 0, 1]; // Default forward direction
     }
     
-    // Calculate centroid
+    // Calculate centroid of all vertices
     var centroid = [0, 0, 0];
+    var minY = vertices[0][1], maxY = vertices[0][1];
+    
     for (var i = 0; i < vertices.length; i++) {
       centroid[0] += vertices[i][0];
       centroid[1] += vertices[i][1];
       centroid[2] += vertices[i][2];
+      if (vertices[i][1] < minY) minY = vertices[i][1];
+      if (vertices[i][1] > maxY) maxY = vertices[i][1];
     }
     centroid[0] /= vertices.length;
     centroid[1] /= vertices.length;
     centroid[2] /= vertices.length;
     
-    // Find min and max values for each axis to determine principal axis
-    var minX = vertices[0][0], maxX = vertices[0][0];
-    var minY = vertices[0][1], maxY = vertices[0][1];
-    var minZ = vertices[0][2], maxZ = vertices[0][2];
+    // The turret is the highest part of the tank and indicates the front
+    // Find the threshold for "turret" vertices (top portion of the tank)
+    var heightRange = maxY - minY;
+    var turretThreshold = maxY - (heightRange * 0.3); // Top 30% of the tank height
     
-    for (var i = 1; i < vertices.length; i++) {
-      var v = vertices[i];
-      if (v[0] < minX) minX = v[0];
-      if (v[0] > maxX) maxX = v[0];
-      if (v[1] < minY) minY = v[1];
-      if (v[1] > maxY) maxY = v[1];
-      if (v[2] < minZ) minZ = v[2];
-      if (v[2] > maxZ) maxZ = v[2];
+    // Calculate the average XZ position of turret vertices (high Y values)
+    var turretCenterX = 0, turretCenterZ = 0;
+    var turretCount = 0;
+    
+    for (var i = 0; i < vertices.length; i++) {
+      if (vertices[i][1] >= turretThreshold) {
+        turretCenterX += vertices[i][0];
+        turretCenterZ += vertices[i][2];
+        turretCount++;
+      }
     }
     
-    // Calculate extents along each axis
-    var extentX = maxX - minX;
-    var extentY = maxY - minY;
-    var extentZ = maxZ - minZ;
-    
-    // Find the axis with the largest extent (principal axis)
-    var principalAxis;
     var forward;
     
-    if (extentX >= extentY && extentX >= extentZ) {
-      // X axis is the principal axis
-      principalAxis = 0;
-      // Find average position of vertices on each side of centroid along X
-      var frontSum = [0, 0, 0], backSum = [0, 0, 0];
-      var frontCount = 0, backCount = 0;
-      for (var i = 0; i < vertices.length; i++) {
-        if (vertices[i][0] > centroid[0]) {
-          frontSum[0] += vertices[i][0];
-          frontSum[1] += vertices[i][1];
-          frontSum[2] += vertices[i][2];
-          frontCount++;
-        } else {
-          backSum[0] += vertices[i][0];
-          backSum[1] += vertices[i][1];
-          backSum[2] += vertices[i][2];
-          backCount++;
-        }
-      }
-      if (frontCount > 0 && backCount > 0) {
-        frontSum[0] /= frontCount;
-        frontSum[1] /= frontCount;
-        frontSum[2] /= frontCount;
-        backSum[0] /= backCount;
-        backSum[1] /= backCount;
-        backSum[2] /= backCount;
-        forward = [
-          frontSum[0] - backSum[0],
-          frontSum[1] - backSum[1],
-          frontSum[2] - backSum[2]
-        ];
-      } else {
-        forward = [1, 0, 0]; // Default along X
-      }
-    } else if (extentY >= extentX && extentY >= extentZ) {
-      // Y axis is the principal axis
-      principalAxis = 1;
-      // Find average position of vertices on each side of centroid along Y
-      var frontSum = [0, 0, 0], backSum = [0, 0, 0];
-      var frontCount = 0, backCount = 0;
-      for (var i = 0; i < vertices.length; i++) {
-        if (vertices[i][1] > centroid[1]) {
-          frontSum[0] += vertices[i][0];
-          frontSum[1] += vertices[i][1];
-          frontSum[2] += vertices[i][2];
-          frontCount++;
-        } else {
-          backSum[0] += vertices[i][0];
-          backSum[1] += vertices[i][1];
-          backSum[2] += vertices[i][2];
-          backCount++;
-        }
-      }
-      if (frontCount > 0 && backCount > 0) {
-        frontSum[0] /= frontCount;
-        frontSum[1] /= frontCount;
-        frontSum[2] /= frontCount;
-        backSum[0] /= backCount;
-        backSum[1] /= backCount;
-        backSum[2] /= backCount;
-        forward = [
-          frontSum[0] - backSum[0],
-          frontSum[1] - backSum[1],
-          frontSum[2] - backSum[2]
-        ];
-      } else {
-        forward = [0, 1, 0]; // Default along Y
-      }
+    if (turretCount > 0) {
+      turretCenterX /= turretCount;
+      turretCenterZ /= turretCount;
+      
+      // The front of the tank is the direction from centroid towards the turret
+      forward = [
+        turretCenterX - centroid[0],
+        0, // We only care about XZ plane movement
+        turretCenterZ - centroid[2]
+      ];
     } else {
-      // Z axis is the principal axis (most common for tanks)
-      principalAxis = 2;
-      // Find average position of vertices on each side of centroid along Z
-      var frontSum = [0, 0, 0], backSum = [0, 0, 0];
-      var frontCount = 0, backCount = 0;
-      for (var i = 0; i < vertices.length; i++) {
-        if (vertices[i][2] > centroid[2]) {
-          frontSum[0] += vertices[i][0];
-          frontSum[1] += vertices[i][1];
-          frontSum[2] += vertices[i][2];
-          frontCount++;
-        } else {
-          backSum[0] += vertices[i][0];
-          backSum[1] += vertices[i][1];
-          backSum[2] += vertices[i][2];
-          backCount++;
-        }
-      }
-      if (frontCount > 0 && backCount > 0) {
-        frontSum[0] /= frontCount;
-        frontSum[1] /= frontCount;
-        frontSum[2] /= frontCount;
-        backSum[0] /= backCount;
-        backSum[1] /= backCount;
-        backSum[2] /= backCount;
-        forward = [
-          frontSum[0] - backSum[0],
-          frontSum[1] - backSum[1],
-          frontSum[2] - backSum[2]
-        ];
-      } else {
-        forward = [0, 0, 1]; // Default along Z
-      }
+      // Fallback: use default forward direction
+      forward = [0, 0, 1];
     }
     
     // Normalize the forward vector
-    var len = Math.sqrt(forward[0] * forward[0] + forward[1] * forward[1] + forward[2] * forward[2]);
-    if (len > 0) {
+    var len = Math.sqrt(forward[0] * forward[0] + forward[2] * forward[2]);
+    if (len > 0.001) {
       forward[0] /= len;
-      forward[1] /= len;
       forward[2] /= len;
     } else {
-      forward = [0, 0, 1]; // Default forward direction
+      // Turret is centered over the body, can't determine front from turret position
+      // Fallback to using the longest horizontal axis
+      var minX = vertices[0][0], maxX = vertices[0][0];
+      var minZ = vertices[0][2], maxZ = vertices[0][2];
+      for (var i = 1; i < vertices.length; i++) {
+        if (vertices[i][0] < minX) minX = vertices[i][0];
+        if (vertices[i][0] > maxX) maxX = vertices[i][0];
+        if (vertices[i][2] < minZ) minZ = vertices[i][2];
+        if (vertices[i][2] > maxZ) maxZ = vertices[i][2];
+      }
+      var extentX = maxX - minX;
+      var extentZ = maxZ - minZ;
+      
+      if (extentX > extentZ) {
+        // Tank is longer along X axis
+        forward = [1, 0, 0];
+      } else {
+        // Tank is longer along Z axis
+        forward = [0, 0, 1];
+      }
     }
     
     return forward;
@@ -633,7 +561,6 @@ const Models = {
       }
       
       var setIdx = this.tanksSetIndices[i];
-      var forwardDir = this.tankForwardDirections[i];
       
       // Update movement timer
       this.tankMovementTimers[i] += deltaTime;
@@ -658,7 +585,7 @@ const Models = {
         // Initial forward angle (model's original facing direction)
         var initialAngle = Math.atan2(this.tankInitialForwardDirections[i][0], this.tankInitialForwardDirections[i][2]);
         // Current forward angle (current movement direction)
-        var currentAngle = Math.atan2(forwardDir[0], forwardDir[2]);
+        var currentAngle = Math.atan2(this.tankForwardDirections[i][0], this.tankForwardDirections[i][2]);
         // Target angle (direction to player)
         var targetAngle = Math.atan2(toPlayer[0], toPlayer[2]);
         
@@ -732,9 +659,10 @@ const Models = {
         this.tankForwardDirections[i] = [Math.sin(newAngle), 0, Math.cos(newAngle)];
       }
       
-      // Calculate potential new position
-      var newPosX = this.tankPositions[i][0] + forwardDir[0] * moveSpeed;
-      var newPosZ = this.tankPositions[i][2] + forwardDir[2] * moveSpeed;
+      // Calculate potential new position (use current forward direction, not cached one)
+      var currentForward = this.tankForwardDirections[i];
+      var newPosX = this.tankPositions[i][0] + currentForward[0] * moveSpeed;
+      var newPosZ = this.tankPositions[i][2] + currentForward[2] * moveSpeed;
       
       // Check for collisions before moving
       if (!this.checkTankCollision(i, newPosX, newPosZ)) {
