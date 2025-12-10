@@ -7,9 +7,19 @@ const HUD = {
   radarSize: 220,
   radarRange: 3.0, // world units shown from center to edge (smaller range => more spread)
   padding: 24,
-  color: '#00ff00',
+  color: '#00aaff',
   enemyColor: '#ff3030',
   obstacleColor: '#ffd000',
+  
+  // Radar sweep properties
+  sweepAngle: 0,
+  prevSweepAngle: 0,
+  sweepSpeed: 2.0, // radians per second
+  sweepTrailLength: Math.PI * 1.5, // how far behind sweep blips stay visible (3/4 of circle)
+  
+  // Stored scanned positions (updated only when sweep passes over)
+  scannedTanks: {},      // tankIndex -> {px, pz, scannedAngle}
+  scannedObstacles: {},  // objectIndex -> {px, pz, scannedAngle}
 
   init() {
     this.canvas = document.getElementById('hudCanvas');
@@ -23,6 +33,17 @@ const HUD = {
   draw(deltaTime) {
     if (!this.ctx) return;
     this.ctx.clearRect(0, 0, this.width, this.height);
+    
+    // Store previous sweep angle for detecting when sweep passes over objects
+    this.prevSweepAngle = this.sweepAngle;
+    
+    // Update sweep angle
+    this.sweepAngle += this.sweepSpeed * deltaTime;
+    if (this.sweepAngle > Math.PI * 2) {
+      this.sweepAngle -= Math.PI * 2;
+      this.prevSweepAngle -= Math.PI * 2; // Keep relative for sweep-pass detection
+    }
+    
     this.drawCrosshair();
     this.drawRadar();
   },
@@ -31,35 +52,31 @@ const HUD = {
     const ctx = this.ctx;
     const cx = this.width / 2;
     const cy = this.height / 2;
-    const gap = 10;
-    const arm = 22;
     const thick = 2;
 
     ctx.save();
     ctx.strokeStyle = this.color;
     ctx.lineWidth = thick;
     ctx.shadowColor = this.color;
-    ctx.shadowBlur = 6;
+    ctx.shadowBlur = 8;
 
-    // Horizontal arms
+    // Classic Battlezone arcade crosshair
+    const boxWidth = 40;
+    const boxHeight = 30;
+    const lineExtend = 120;
+
+    // Center targeting box
+    ctx.strokeRect(cx - boxWidth / 2, cy - boxHeight / 2, boxWidth, boxHeight);
+
+    // Horizontal lines extending from box
     ctx.beginPath();
-    ctx.moveTo(cx - arm, cy);
-    ctx.lineTo(cx - gap, cy);
-    ctx.moveTo(cx + gap, cy);
-    ctx.lineTo(cx + arm, cy);
+    // Left line
+    ctx.moveTo(cx - boxWidth / 2 - lineExtend, cy);
+    ctx.lineTo(cx - boxWidth / 2, cy);
+    // Right line
+    ctx.moveTo(cx + boxWidth / 2, cy);
+    ctx.lineTo(cx + boxWidth / 2 + lineExtend, cy);
     ctx.stroke();
-
-    // Vertical arms
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - arm);
-    ctx.lineTo(cx, cy - gap);
-    ctx.moveTo(cx, cy + gap);
-    ctx.lineTo(cx, cy + arm);
-    ctx.stroke();
-
-    // Center box
-    const box = 6;
-    ctx.strokeRect(cx - box / 2, cy - box / 2, box, box);
 
     ctx.restore();
   },
@@ -96,6 +113,35 @@ const HUD = {
     ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
     ctx.stroke();
 
+    // Draw sweep trail (fading gradient behind sweep line)
+    const sweepGradient = ctx.createConicGradient(this.sweepAngle - Math.PI / 2, centerX, centerY);
+    sweepGradient.addColorStop(0, 'rgba(0, 170, 255, 0.35)');
+    sweepGradient.addColorStop(0.25, 'rgba(0, 170, 255, 0.15)');
+    sweepGradient.addColorStop(0.5, 'rgba(0, 170, 255, 0.05)');
+    sweepGradient.addColorStop(0.75, 'rgba(0, 170, 255, 0)');
+    sweepGradient.addColorStop(1, 'rgba(0, 170, 255, 0)');
+    
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius - 1, 0, Math.PI * 2);
+    ctx.fillStyle = sweepGradient;
+    ctx.fill();
+    ctx.restore();
+
+    // Draw sweep line
+    const sweepEndX = centerX + Math.cos(this.sweepAngle - Math.PI / 2) * radius;
+    const sweepEndY = centerY + Math.sin(this.sweepAngle - Math.PI / 2) * radius;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.8)';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = '#00ffff';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    ctx.lineTo(sweepEndX, sweepEndY);
+    ctx.stroke();
+    ctx.restore();
+
     // Player indicator (triangle pointing up/forward)
     ctx.beginPath();
     ctx.moveTo(centerX, centerY - 8);
@@ -120,8 +166,48 @@ const HUD = {
 
     const scale = radius / this.radarRange;
 
-    // Obstacles (houses/buildings) in yellow
-    const drawBlip = (px, pz, color, size = 4) => {
+    // Get angle of a point from radar center
+    const getAngle = (px, pz) => {
+      let angle = Math.atan2(pz, px) + Math.PI / 2;
+      if (angle < 0) angle += Math.PI * 2;
+      return angle;
+    };
+
+    // Check if sweep just passed over a given angle
+    const sweepPassedOver = (targetAngle) => {
+      let prev = this.prevSweepAngle % (Math.PI * 2);
+      let curr = this.sweepAngle % (Math.PI * 2);
+      if (prev < 0) prev += Math.PI * 2;
+      if (curr < 0) curr += Math.PI * 2;
+      
+      // Handle wrap-around
+      if (prev > curr) {
+        // Sweep wrapped around
+        return targetAngle >= prev || targetAngle <= curr;
+      }
+      return targetAngle >= prev && targetAngle <= curr;
+    };
+
+    // Calculate blip opacity based on its scanned angle
+    const getBlipOpacity = (scannedAngle) => {
+      let normalizedSweep = this.sweepAngle % (Math.PI * 2);
+      if (normalizedSweep < 0) normalizedSweep += Math.PI * 2;
+      
+      // Calculate angular distance behind sweep (how long ago sweep passed)
+      let angleBehind = normalizedSweep - scannedAngle;
+      if (angleBehind < 0) angleBehind += Math.PI * 2;
+      
+      // If within trail length, calculate fade
+      if (angleBehind <= this.sweepTrailLength) {
+        // Strong at sweep, fading as angle increases
+        return 1.0 - (angleBehind / this.sweepTrailLength) * 0.65;
+      }
+      // Minimum visibility for objects far from sweep
+      return 0.35;
+    };
+
+    // Draw blip at stored position with sweep-based opacity
+    const drawBlip = (px, pz, scannedAngle, color, blipSize = 4) => {
       const dist = Math.sqrt(px * px + pz * pz);
       let clampedX = px;
       let clampedZ = pz;
@@ -132,14 +218,21 @@ const HUD = {
       }
       const blipX = centerX + clampedX;
       const blipY = centerY + clampedZ;
+      
+      const opacity = getBlipOpacity(scannedAngle);
+      
       ctx.save();
+      ctx.globalAlpha = opacity;
       ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = opacity > 0.7 ? 12 : 4;
       ctx.beginPath();
-      ctx.arc(blipX, blipY, size, 0, Math.PI * 2);
+      ctx.arc(blipX, blipY, blipSize, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     };
 
+    // Process obstacles - update stored positions only when sweep passes
     if (Array.isArray(Models.gameObjects)) {
       for (let i = 0; i < Models.gameObjects.length; i++) {
         const obj = Models.gameObjects[i];
@@ -148,35 +241,57 @@ const HUD = {
         // Consider collidable obstacles only
         if (!obj.collidable) continue;
 
-        // Use bounding box center for more stable positioning
+        // Calculate current real position
         const center = obj.getBoundingBoxCenter ? obj.getBoundingBoxCenter() : obj.position;
         const dx = center[0] - Camera.Eye[0];
         const dz = center[2] - Camera.Eye[2];
-
         const forwardDist = dx * forward[0] + dz * forward[2];
         const rightDist = dx * right[0] + dz * right[2];
-
         const px = rightDist * scale;
         const pz = -forwardDist * scale;
-
-        drawBlip(px, pz, this.obstacleColor, 3.5);
+        
+        const currentAngle = getAngle(px, pz);
+        
+        // Update stored position if sweep passed over this angle
+        if (sweepPassedOver(currentAngle) || !this.scannedObstacles[i]) {
+          this.scannedObstacles[i] = { px, pz, scannedAngle: currentAngle };
+        }
+        
+        // Draw at stored position
+        const stored = this.scannedObstacles[i];
+        if (stored) {
+          drawBlip(stored.px, stored.pz, stored.scannedAngle, this.obstacleColor, 3.5);
+        }
       }
     }
 
+    // Process tanks - update stored positions only when sweep passes
     for (let i = 0; i < Models.tankPositions.length; i++) {
-      if (Models.isTankDead && Models.isTankDead(i)) continue;
+      if (Models.isTankDead && Models.isTankDead(i)) {
+        delete this.scannedTanks[i];
+        continue;
+      }
+      
       const pos = Models.tankPositions[i];
       const dx = pos[0] - Camera.Eye[0];
       const dz = pos[2] - Camera.Eye[2];
-
-      // Project into camera-aligned XZ plane
       const forwardDist = dx * forward[0] + dz * forward[2];
       const rightDist = dx * right[0] + dz * right[2];
-
       const px = rightDist * scale;
-      const pz = -forwardDist * scale; // forward should move upward on radar
-
-      drawBlip(px, pz, this.enemyColor, 4);
+      const pz = -forwardDist * scale;
+      
+      const currentAngle = getAngle(px, pz);
+      
+      // Update stored position if sweep passed over this angle
+      if (sweepPassedOver(currentAngle) || !this.scannedTanks[i]) {
+        this.scannedTanks[i] = { px, pz, scannedAngle: currentAngle };
+      }
+      
+      // Draw at stored position
+      const stored = this.scannedTanks[i];
+      if (stored) {
+        drawBlip(stored.px, stored.pz, stored.scannedAngle, this.enemyColor, 4);
+      }
     }
 
     ctx.restore();
