@@ -88,12 +88,12 @@ const Input = {
       Camera.yaw(this.yawSpeed * deltaTime);
     }
     
-    // Forward/backward movement
+    // Forward/backward movement with collision check
     if (this.keys.moveForward) {
-      Camera.moveForward(this.moveSpeed * deltaTime);
+      this.tryMoveForward(this.moveSpeed * deltaTime);
     }
     if (this.keys.moveBackward) {
-      Camera.moveForward(-this.moveSpeed * deltaTime);
+      this.tryMoveForward(-this.moveSpeed * deltaTime);
     }
     
     // Vertical movement
@@ -103,6 +103,36 @@ const Input = {
     if (this.keys.moveDown) {
       Camera.moveUp(-this.verticalSpeed * deltaTime);
     }
+  },
+  
+  // Try to move forward, checking for collisions with buildings and tanks
+  tryMoveForward: function(distance) {
+    // Calculate the forward direction
+    var dir = [
+      Camera.Target[0] - Camera.Eye[0],
+      Camera.Target[1] - Camera.Eye[1],
+      Camera.Target[2] - Camera.Eye[2]
+    ];
+    
+    // Normalize direction
+    var len = Math.sqrt(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]);
+    if (len > 0) {
+      dir[0] /= len;
+      dir[1] /= len;
+      dir[2] /= len;
+    }
+    
+    // Calculate potential new position
+    var newX = Camera.Eye[0] + dir[0] * distance;
+    var newY = Camera.Eye[1] + dir[1] * distance;
+    var newZ = Camera.Eye[2] + dir[2] * distance;
+    
+    // Check if move is allowed (no collision)
+    if (Collision.checkPlayerMove(newX, newY, newZ)) {
+      // No collision - perform the move
+      Camera.moveForward(distance);
+    }
+    // If collision detected, don't move
   }
 };
 
